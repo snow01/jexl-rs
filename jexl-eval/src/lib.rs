@@ -44,9 +44,7 @@ use jexl_parser::{
     Parser,
 };
 use jexl_parser::ast::{ArrayValue, DateTimeValue, DateLikeValue, DurationValue, NumericValue, StdFunction, StringValue, TimeLikeValue};
-use value::{Number, Value};
-
-use crate::value::DateTime;
+pub use value::{Number, Value, DateTime};
 use semver::Version;
 
 pub mod error;
