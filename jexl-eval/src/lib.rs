@@ -159,7 +159,7 @@ impl<'a> Evaluator<'a> {
         self.eval_ast(tree, &context)
     }
 
-    fn eval_ast<'b>(&self, ast: Expression, context: &EvaluationContext) -> Result<'b, Value> {
+    pub fn eval_ast<'b>(&self, ast: Expression, context: &EvaluationContext) -> Result<'b, Value> {
         match ast {
             Expression::Number(n) => Ok((n).into()),
             Expression::Boolean(b) => Ok(Value::Bool(b)),
