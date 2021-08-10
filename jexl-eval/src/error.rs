@@ -6,11 +6,11 @@ use jexl_parser::{ast::OpCode, ParseError, Token};
 
 use crate::value::Value;
 
-pub type Result<'a, T, E = EvaluationError<'a>> = std::result::Result<T, E>;
+pub type Result<T, E = EvaluationError> = std::result::Result<T, E>;
 #[derive(Debug, thiserror::Error)]
-pub enum EvaluationError<'a> {
+pub enum EvaluationError {
     #[error("Parsing error: {0}")]
-    ParseError(Box<ParseError<usize, Token<'a>, &'a str>>),
+    ParseError(String),
 
     #[error("Invalid binary operation, left: {left:?}, right: {right:?}, operation: {operation}")]
     InvalidBinaryOp {
@@ -44,8 +44,8 @@ pub enum EvaluationError<'a> {
     }
 }
 
-impl<'a> From<ParseError<usize, Token<'a>, &'a str>> for EvaluationError<'a> {
+impl <'a> From<ParseError<usize, Token<'a>, &'a str>> for EvaluationError {
     fn from(cause: ParseError<usize, Token<'a>, &'a str>) -> Self {
-        EvaluationError::ParseError(Box::new(cause))
+        EvaluationError::ParseError(cause.to_string())
     }
 }

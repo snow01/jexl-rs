@@ -93,14 +93,14 @@ type EvaluationContext = Value;
 ///
 /// Returns a Result with an `anyhow::Error`. This allows consumers to return their own custom errors
 /// in the closure, and use `.into` to convert it into an `anyhow::Error`. The error message will be perserved
-pub type TransformFn<'a> = Box<dyn Fn(Option<&[Value]>) -> Result<Value, anyhow::Error> + 'a>;
+pub type TransformFn = Box<dyn Fn(Option<&[Value]>) -> Result<Value, anyhow::Error>>;
 
 #[derive(Default)]
-pub struct Evaluator<'a> {
-    transforms: HashMap<String, TransformFn<'a>>,
+pub struct Evaluator {
+    transforms: HashMap<String, TransformFn>,
 }
 
-impl<'a> Evaluator<'a> {
+impl Evaluator {
     pub fn new() -> Self {
         Self::default()
     }
@@ -134,23 +134,23 @@ impl<'a> Evaluator<'a> {
     /// ```
     pub fn with_transform<F>(mut self, name: &str, transform: F) -> Self
         where
-            F: Fn(Option<&[Value]>) -> Result<Value, anyhow::Error> + 'a,
+            F: Fn(Option<&[Value]>) -> Result<Value, anyhow::Error> + 'static,
     {
         self.transforms
             .insert(name.to_string(), Box::new(transform));
         self
     }
 
-    pub fn eval<'b>(&self, input: &'b str) -> Result<'b, Value> {
+    pub fn eval(&self, input: &str) -> Result<Value> {
         let context = Value::from(BTreeMap::new());
         self.eval_in_context(input, &context)
     }
 
-    pub fn eval_in_context<'b, T: serde::Serialize>(
+    pub fn eval_in_context<T: serde::Serialize>(
         &self,
-        input: &'b str,
+        input: &str,
         context: T,
-    ) -> Result<'b, Value> {
+    ) -> Result<Value> {
         let tree = Parser::parse(input)?;
         let context = value::to_value(context)?;
         if !context.is_object() {
@@ -159,7 +159,7 @@ impl<'a> Evaluator<'a> {
         self.eval_ast(tree, &context)
     }
 
-    pub fn eval_ast<'b>(&self, ast: Expression, context: &EvaluationContext) -> Result<'b, Value> {
+    pub fn eval_ast(&self, ast: Expression, context: &EvaluationContext) -> Result<Value> {
         match ast {
             Expression::Number(n) => Ok((n).into()),
             Expression::Boolean(b) => Ok(Value::Bool(b)),
@@ -310,7 +310,7 @@ impl<'a> Evaluator<'a> {
         }
     }
 
-    fn eval_std_func<'b>(&self, std_func: StdFunction, context: &EvaluationContext) -> Result<'b, Value> {
+    fn eval_std_func(&self, std_func: StdFunction, context: &EvaluationContext) -> Result<Value> {
         use voca_rs::Voca;
 
         match std_func {
@@ -995,7 +995,7 @@ impl<'a> Evaluator<'a> {
         }
     }
 
-    fn slice_range<'b>(&self, value: &str, start: Option<NumericValue>, end: Option<NumericValue>, context: &EvaluationContext) -> Result<'b, Range<usize>> {
+    fn slice_range(&self, value: &str, start: Option<NumericValue>, end: Option<NumericValue>, context: &EvaluationContext) -> Result<Range<usize>> {
         let start_idx = self.eval_to_usize(start, context, || 0)?;
         let end_idx = self.eval_to_usize(end, context, || value.len())?;
         Ok(start_idx..end_idx)
@@ -1039,7 +1039,7 @@ impl<'a> Evaluator<'a> {
         }
     }
 
-    fn eval_array_value<'b>(&self, value_expr: ArrayValue, context: &EvaluationContext) -> Result<'b, Vec<Value>> {
+    fn eval_array_value(&self, value_expr: ArrayValue, context: &EvaluationContext) -> Result<Vec<Value>> {
         match self.eval_ast(*value_expr.array, context)? {
             Value::Null => Ok(vec![]),
             Value::String(_value) => Err(EvaluationError::InvalidValueType { expected: "Array".to_string(), got: "String".to_string() }),
@@ -1055,7 +1055,7 @@ impl<'a> Evaluator<'a> {
         }
     }
 
-    fn eval_string_value<'b>(&self, value_expr: StringValue, context: &EvaluationContext) -> Result<'b, String> {
+    fn eval_string_value(&self, value_expr: StringValue, context: &EvaluationContext) -> Result<String> {
         match self.eval_ast(*value_expr.value, context)? {
             Value::Null => Ok("".to_string()),
             Value::String(value) => Ok(value),
@@ -1071,7 +1071,7 @@ impl<'a> Evaluator<'a> {
         }
     }
 
-    fn eval_numeric_value<'b>(&self, value_expr: NumericValue, context: &EvaluationContext) -> Result<'b, Number> {
+    fn eval_numeric_value(&self, value_expr: NumericValue, context: &EvaluationContext) -> Result<Number> {
         match self.eval_ast(*value_expr.value, context)? {
             Value::Null => Ok(Number::from(0)),
             Value::Number(value) => Ok(value),
@@ -1087,7 +1087,7 @@ impl<'a> Evaluator<'a> {
         }
     }
 
-    fn eval_datetime_value<'b>(&self, value_expr: DateTimeValue, context: &EvaluationContext) -> Result<'b, value::DateTime> {
+    fn eval_datetime_value(&self, value_expr: DateTimeValue, context: &EvaluationContext) -> Result<value::DateTime> {
         match self.eval_ast(*value_expr.value, context)? {
             Value::Null => Err(EvaluationError::InvalidValueType { expected: "DateTime".to_string(), got: "Null".to_string() }),
             Value::Number(_) => Err(EvaluationError::InvalidValueType { expected: "DateTime".to_string(), got: "Number".to_string() }),
@@ -1103,7 +1103,7 @@ impl<'a> Evaluator<'a> {
         }
     }
 
-    fn eval_datelike_value<'b>(&self, value_expr: DateLikeValue, context: &EvaluationContext) -> Result<'b, value::DateLike> {
+    fn eval_datelike_value(&self, value_expr: DateLikeValue, context: &EvaluationContext) -> Result<value::DateLike> {
         match self.eval_ast(*value_expr.value, context)? {
             Value::Null => Err(EvaluationError::InvalidValueType { expected: "Date".to_string(), got: "Null".to_string() }),
             Value::Number(_) => Err(EvaluationError::InvalidValueType { expected: "Date".to_string(), got: "Number".to_string() }),
@@ -1122,7 +1122,7 @@ impl<'a> Evaluator<'a> {
         }
     }
 
-    fn eval_timelike_value<'b>(&self, value_expr: TimeLikeValue, context: &EvaluationContext) -> Result<'b, value::TimeLike>  {
+    fn eval_timelike_value(&self, value_expr: TimeLikeValue, context: &EvaluationContext) -> Result<value::TimeLike>  {
         match self.eval_ast(*value_expr.value, context)? {
             Value::Null => Err(EvaluationError::InvalidValueType { expected: "Time".to_string(), got: "Null".to_string() }),
             Value::Number(_) => Err(EvaluationError::InvalidValueType { expected: "Time".to_string(), got: "Number".to_string() }),
@@ -1141,7 +1141,7 @@ impl<'a> Evaluator<'a> {
         }
     }
 
-    fn eval_duration_value<'b>(&self, value_expr: DurationValue, context: &EvaluationContext) -> Result<'b, chrono::Duration> {
+    fn eval_duration_value(&self, value_expr: DurationValue, context: &EvaluationContext) -> Result<chrono::Duration> {
         match self.eval_ast(*value_expr.value, context)? {
             Value::Null => Err(EvaluationError::InvalidValueType { expected: "Duration".to_string(), got: "Null".to_string() }),
             Value::Number(_) => Err(EvaluationError::InvalidValueType { expected: "Duration".to_string(), got: "Number".to_string() }),
@@ -1157,7 +1157,7 @@ impl<'a> Evaluator<'a> {
         }
     }
 
-    fn apply_op<'b>(operation: OpCode, left: Value, right: Value) -> Result<'b, Value> {
+    fn apply_op(operation: OpCode, left: Value, right: Value) -> Result<Value> {
         match (operation, left, right) {
             (OpCode::And, a, b) => Ok(if a.is_truthy() { b } else { a }),
             (OpCode::Or, a, b) => Ok(if a.is_truthy() { a } else { b }),
@@ -1474,7 +1474,7 @@ impl<'a> Evaluator<'a> {
         }
     }
 
-    fn apply_semver_op<'b>(op: OpCode, a: Version, b: Version) -> Result<'b, Value> {
+    fn apply_semver_op(op: OpCode, a: Version, b: Version) -> Result<Value> {
         match op {
             OpCode::Less => Ok(Value::Bool(a < b)),
             OpCode::Greater => Ok(Value::Bool(a > b)),
