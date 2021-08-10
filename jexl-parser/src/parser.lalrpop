@@ -1,7 +1,7 @@
 use std::str::FromStr;
 use lalrpop_util::ParseError;
 
-use crate::ast::{Expression, OpCode, StdFunction, NumericValue, StringValue, ArrayValue, DateTimeValue, DateValue, TimeValue, DurationValue};
+use crate::ast::{Expression, OpCode, StdFunction, NumericValue, StringValue, ArrayValue, DateTimeValue, DateLikeValue, TimeLikeValue, DurationValue};
 
 grammar;
 
@@ -86,44 +86,44 @@ Expr80: Box<Expression> = {
     // <array value>.sum()
     <subject: Expr80> "." "sum" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncSum(ArrayValue{array: subject}))),
 
-    // <array or string value>.len()
+    // <any value>.len()
     <subject: Expr80> "." "len" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncLen(subject))),
 
-    // <array or string value>.isEmpty()
-    <subject: Expr80> "." "isEmpty" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsEmpty(subject))),
+    // <any value>.is_empty()
+    <subject: Expr80> "." "is_empty" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsEmpty(subject))),
 
     // <string value>.capitalise()
     <subject: Expr80> "." "capitalise" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncCapitalise(StringValue{value: subject}))),
 
-    // <string value>.upperCase()
-    <subject: Expr80> "." "upperCase" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncUpperCase(StringValue{value: subject}))),
+    // <string value>.to_upper_case()
+    <subject: Expr80> "." "to_upper_case" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncUpperCase(StringValue{value: subject}))),
 
-    // <string value>.lowerCase()
-    <subject: Expr80> "." "lowerCase" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncLowerCase(StringValue{value: subject}))),
+    // <string value>.to_lower_case()
+    <subject: Expr80> "." "to_lower_case" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncLowerCase(StringValue{value: subject}))),
 
-    // <string value>.titleCase()
-    <subject: Expr80> "." "titleCase" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncTitleCase(StringValue{value: subject}))),
+    // <string value>.to_title_case()
+    <subject: Expr80> "." "to_title_case" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncTitleCase(StringValue{value: subject}))),
 
-    // <string value>.kebabCase()
-    <subject: Expr80> "." "kebabCase" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncKebabCase(StringValue{value: subject}))),
+    // <string value>.to_kebab_case()
+    <subject: Expr80> "." "to_kebab_case" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncKebabCase(StringValue{value: subject}))),
 
-    // <string value>.snakeCase()
-    <subject: Expr80> "." "snakeCase" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncSnakeCase(StringValue{value: subject}))),
+    // <string value>.to_snake_case()
+    <subject: Expr80> "." "to_snake_case" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncSnakeCase(StringValue{value: subject}))),
 
-    // <string value>.swapCase()
-    <subject: Expr80> "." "swapCase" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncSwapCase(StringValue{value: subject}))),
+    // <string value>.swap_case()
+    <subject: Expr80> "." "swap_case" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncSwapCase(StringValue{value: subject}))),
 
-    // <string value>.trainCase()
-    <subject: Expr80> "." "trainCase" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncTrainCase(StringValue{value: subject}))),
+    // <string value>.to_train_case()
+    <subject: Expr80> "." "to_train_case" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncTrainCase(StringValue{value: subject}))),
 
-    // <string value>.pascalCase()
-    <subject: Expr80> "." "pascalCase" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncPascalCase(StringValue{value: subject}))),
+    // <string value>.to_pascal_case()
+    <subject: Expr80> "." "to_pascal_case" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncPascalCase(StringValue{value: subject}))),
 
-    // <string value>.shoutyKebabCase()
-    <subject: Expr80> "." "shoutyKebabCase" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncShoutyKebabCase(StringValue{value: subject}))),
+    // <string value>.to_shouty_kebab_case()
+    <subject: Expr80> "." "to_shouty_kebab_case" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncShoutyKebabCase(StringValue{value: subject}))),
 
-    // <string value>.shoutySnakeCase()
-    <subject: Expr80> "." "shoutySnakeCase" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncShoutySnakeCase(StringValue{value: subject}))),
+    // <string value>.to_shouty_snake_cse()
+    <subject: Expr80> "." "to_shouty_snake_cse" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncShoutySnakeCase(StringValue{value: subject}))),
 
     // <string value>.md5()
     <subject: Expr80> "." "md5" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncMD5(StringValue{value: subject}))),
@@ -131,50 +131,50 @@ Expr80: Box<Expression> = {
     // <string value>.sha256()
     <subject: Expr80> "." "sha256" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncSHA256(StringValue{value: subject}))),
 
-    // <string value>.isDecimal()
-    <subject: Expr80> "." "isDecimal" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsDecimal(StringValue{value: subject}))),
+    // <string value>.is_decimal()
+    <subject: Expr80> "." "is_decimal" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsDecimal(StringValue{value: subject}))),
 
-    // <string value>.isAlphaNum()
-    <subject: Expr80> "." "isAlphaNum" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsAlphaNum(StringValue{value: subject}))),
+    // <string value>.is_alpha_num()
+    <subject: Expr80> "." "is_alpha_num" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsAlphaNum(StringValue{value: subject}))),
 
-    // <string value>.isAlpha()
-    <subject: Expr80> "." "isAlpha" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsAlpha(StringValue{value: subject}))),
+    // <string value>.is_alpha()
+    <subject: Expr80> "." "is_alpha" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsAlpha(StringValue{value: subject}))),
 
-    // <string value>.isDigit()
-    <subject: Expr80> "." "isDigit" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsDigit(StringValue{value: subject}))),
+    // <string value>.is_digit()
+    <subject: Expr80> "." "is_digit" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsDigit(StringValue{value: subject}))),
 
-    // <string value>.isNumeric()
-    <subject: Expr80> "." "isNumeric" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsNumeric(StringValue{value: subject}))),
+    // <string value>.is_numeric()
+    <subject: Expr80> "." "is_numeric" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsNumeric(StringValue{value: subject}))),
 
-    // <string value>.isSpace()
-    <subject: Expr80> "." "isSpace" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsSpace(StringValue{value: subject}))),
+    // <string value>.is_space()
+    <subject: Expr80> "." "is_space" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsSpace(StringValue{value: subject}))),
 
-    // <string value>.isIdentifier()
-    <subject: Expr80> "." "isIdentifier" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsIdentifier(StringValue{value: subject}))),
+    // <string value>.is_identifier()
+    <subject: Expr80> "." "is_identifier" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsIdentifier(StringValue{value: subject}))),
 
-    // <string value>.isLowerCase()
-    <subject: Expr80> "." "isLowerCase" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsLowerCase(StringValue{value: subject}))),
+    // <string value>.is_lower_case()
+    <subject: Expr80> "." "is_lower_case" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsLowerCase(StringValue{value: subject}))),
 
-    // <string value>.isUpperCase()
-    <subject: Expr80> "." "isUpperCase" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsUpperCase(StringValue{value: subject}))),
+    // <string value>.is_upper_case()
+    <subject: Expr80> "." "is_upper_case" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsUpperCase(StringValue{value: subject}))),
 
-    // <string value>.isTitleCase()
-    <subject: Expr80> "." "isTitleCase" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsTitleCase(StringValue{value: subject}))),
+    // <string value>.is_title_case()
+    <subject: Expr80> "." "is_title_case" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsTitleCase(StringValue{value: subject}))),
 
-    // <string value>.isSnakeCase()
-    <subject: Expr80> "." "isSnakeCase" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsSnakeCase(StringValue{value: subject}))),
+    // <string value>.is_snake_case()
+    <subject: Expr80> "." "is_snake_case" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsSnakeCase(StringValue{value: subject}))),
 
-    // <string value>.isTrainCase()
-    <subject: Expr80> "." "isTrainCase" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsTrainCase(StringValue{value: subject}))),
+    // <string value>.is_train_case()
+    <subject: Expr80> "." "is_train_case" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsTrainCase(StringValue{value: subject}))),
 
-    // <string value>.isPascalCase()
-    <subject: Expr80> "." "isPascalCase" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsPascalCase(StringValue{value: subject}))),
+    // <string value>.is_pascal_case()
+    <subject: Expr80> "." "is_pascal_case" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsPascalCase(StringValue{value: subject}))),
 
-    // <string value>.isShoutyKebabCase()
-    <subject: Expr80> "." "isShoutyKebabCase" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsShoutyKebabCase(StringValue{value: subject}))),
+    // <string value>.is_shouty_kebab_case()
+    <subject: Expr80> "." "is_shouty_kebab_case" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsShoutyKebabCase(StringValue{value: subject}))),
 
-    // <string value>.isShoutySnakeCase()
-    <subject: Expr80> "." "isShoutySnakeCase" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsShoutySnakeCase(StringValue{value: subject}))),
+    // <string value>.is_shouty_snake_case()
+    <subject: Expr80> "." "is_shouty_snake_case" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsShoutySnakeCase(StringValue{value: subject}))),
 
     // <string value>.strip()
     <subject: Expr80> "." "strip" "(" <with: Expression?> ")" => Box::new(Expression::StdFunction(StdFunction::FuncStrip{subject: StringValue{value: subject}, with: with.map(|s| StringValue{value: s})})),
@@ -185,11 +185,11 @@ Expr80: Box<Expression> = {
     // <string value>.rstrip()
     <subject: Expr80> "." "rstrip" "(" <with: Expression?> ")" => Box::new(Expression::StdFunction(StdFunction::FuncRStrip{subject: StringValue{value: subject}, with: with.map(|s| StringValue{value: s})})),
 
-    // <string value>.endsWith()
-    <subject: Expr80> "." "endsWith" "(" <with: Expression> <start:("," "start" "=" <Expression>)?> <end:("," "end" "=" <Expression>)?> ")" => Box::new(Expression::StdFunction(StdFunction::FuncEndsWith{subject: StringValue{value: subject}, with: StringValue{value: with}, start: start.map(|s| NumericValue{value: s}), end: end.map(|s| NumericValue{value: s})})),
+    // <string value>.ends_with()
+    <subject: Expr80> "." "ends_with" "(" <with: Expression> <start:("," "start" "=" <Expression>)?> <end:("," "end" "=" <Expression>)?> ")" => Box::new(Expression::StdFunction(StdFunction::FuncEndsWith{subject: StringValue{value: subject}, with: StringValue{value: with}, start: start.map(|s| NumericValue{value: s}), end: end.map(|s| NumericValue{value: s})})),
 
-    // <string value>.startsWith()
-    <subject: Expr80> "." "startsWith" "(" <with: Expression> <start:("," "start" "=" <Expression>)?> <end:("," "end" "=" <Expression>)?> ")" => Box::new(Expression::StdFunction(StdFunction::FuncStartsWith{subject: StringValue{value: subject}, with: StringValue{value: with}, start: start.map(|s| NumericValue{value: s}), end: end.map(|s| NumericValue{value: s})})),
+    // <string value>.starts_with()
+    <subject: Expr80> "." "starts_with" "(" <with: Expression> <start:("," "start" "=" <Expression>)?> <end:("," "end" "=" <Expression>)?> ")" => Box::new(Expression::StdFunction(StdFunction::FuncStartsWith{subject: StringValue{value: subject}, with: StringValue{value: with}, start: start.map(|s| NumericValue{value: s}), end: end.map(|s| NumericValue{value: s})})),
 
     // <string value>.split()
     <subject: Expr80> "." "split" "(" <with: Expression> <num_splits:("," "num_splits" "=" <Expression>)?> ")" => Box::new(Expression::StdFunction(StdFunction::FuncSplit{subject: StringValue{value: subject}, with: StringValue{value: with}, num_splits: num_splits.map(|s| NumericValue{value: s})})),
@@ -226,6 +226,66 @@ Expr80: Box<Expression> = {
 
     // <string or numeric value>.to_utc_datetime()
     <subject: Expr80> "." "to_utc_datetime" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncParseUtcDateTime(StringValue{value: subject}))),
+    
+    // <datetime value>.get_date()
+    <subject: Expr80> "." "get_date" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncGetDateFromDateTime(DateTimeValue{value: subject}))),
+
+    // <datetime value>.get_time()
+    <subject: Expr80> "." "get_time" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncGetTimeFromDateTime(DateTimeValue{value: subject}))),
+
+    // <datetime value>.get_timestamp()
+    <subject: Expr80> "." "get_timestamp" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncGetTimestampFromDateTime(DateTimeValue{value: subject}))),
+
+    // <datetime value>.get_timestamp_millis()
+    <subject: Expr80> "." "get_timestamp_millis" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncGetTimestampMillisFromDateTime(DateTimeValue{value: subject}))),
+
+    // <datelike value>.get_year()
+    <subject: Expr80> "." "get_year" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncGetYearFromDate(DateLikeValue{value: subject}))),
+
+    // <datelike value>.get_month()
+    <subject: Expr80> "." "get_month" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncGetMonthFromDate(DateLikeValue{value: subject}))),
+
+    // <datelike value>.get_day_of_month()
+    <subject: Expr80> "." "get_day_of_month" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncGetDayOfMonthFromDate(DateLikeValue{value: subject}))),
+
+    // <datelike value>.get_day_of_year()
+    <subject: Expr80> "." "get_day_of_year" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncGetDayOfYearFromDate(DateLikeValue{value: subject}))),
+
+    // <datelike value>.get_day_of_week()
+    <subject: Expr80> "." "get_day_of_week" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncGetDayOfWeekFromDate(DateLikeValue{value: subject}))),
+
+    // <timelike value>.get_hour()
+    <subject: Expr80> "." "get_hour" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncGetHourFromTime(TimeLikeValue{value: subject}))),
+
+    // <timelike value>/get_minute()
+    <subject: Expr80> "." "get_minute" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncGetMinuteFromTime(TimeLikeValue{value: subject}))),
+
+    // <timelike value>.get_second()
+    <subject: Expr80> "." "get_second" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncGetSecondFromTime(TimeLikeValue{value: subject}))),
+
+    // <timelike value>.get_millisecond()
+    <subject: Expr80> "." "get_millisecond" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncGetMillisecondFromTime(TimeLikeValue{value: subject}))),
+
+    // <duration value>.get_weeks()
+    <subject: Expr80> "." "get_weeks" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncGetWeeksFromDuration(DurationValue{value: subject}))),
+
+    // <duration value>.get_days()
+    <subject: Expr80> "." "get_days" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncGetDaysFromDuration(DurationValue{value: subject}))),
+
+    // <duration value>.get_hours()
+    <subject: Expr80> "." "get_hours" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncGetHoursFromDuration(DurationValue{value: subject}))),
+
+    // <duration value>.get_minutes()
+    <subject: Expr80> "." "get_minutes" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncGetMinutesFromDuration(DurationValue{value: subject}))),
+
+    // <duration value>.get_seconds()
+    <subject: Expr80> "." "get_seconds" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncGetSecondsFromDuration(DurationValue{value: subject}))),
+
+    // <duration value>.get_milliseconds()
+    <subject: Expr80> "." "get_milliseconds" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncGetMillisecondsFromDuration(DurationValue{value: subject}))),
+
+    // get_microseconds(<duration value>)
+    <subject: Expr80> "." "get_microseconds" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncGetMicrosecondsFromDuration(DurationValue{value: subject}))),    
 
     <subject: Expr80> "." <name: Identifier> <args: FnArgs> => Box::new(Expression::CustomTransform{name, subject, args}),
 
@@ -321,44 +381,44 @@ Expr90: Box<Expression> = {
     // <array value>.sum()
     "sum" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncSum(ArrayValue{array: subject}))),
 
-    // <array or string value>.len()
+    // <any value>.len()
     "len" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncLen(subject))),
 
-    // <array or string value>.isEmpty()
-    "isEmpty" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsEmpty(subject))),
+    // <any value>.is_empty()
+    "is_empty" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsEmpty(subject))),
 
     // <string value>.capitalise()
     "capitalise" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncCapitalise(StringValue{value: subject}))),
 
-    // <string value>.upperCase()
-    "upperCase" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncUpperCase(StringValue{value: subject}))),
+    // <string value>.to_upper_case()
+    "to_upper_case" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncUpperCase(StringValue{value: subject}))),
 
-    // <string value>.lowerCase()
-    "lowerCase" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncLowerCase(StringValue{value: subject}))),
+    // <string value>.to_lower_case()
+    "to_lower_case" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncLowerCase(StringValue{value: subject}))),
 
-    // <string value>.titleCase()
-    "titleCase" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncTitleCase(StringValue{value: subject}))),
+    // <string value>.to_title_case()
+    "to_title_case" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncTitleCase(StringValue{value: subject}))),
 
-    // <string value>.kebabCase()
-    "kebabCase" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncKebabCase(StringValue{value: subject}))),
+    // <string value>.to_kebab_case()
+    "to_kebab_case" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncKebabCase(StringValue{value: subject}))),
 
-    // <string value>.snakeCase()
-    "snakeCase" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncSnakeCase(StringValue{value: subject}))),
+    // <string value>.to_snake_case()
+    "to_snake_case" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncSnakeCase(StringValue{value: subject}))),
 
-    // <string value>.swapCase()
-    "swapCase" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncSwapCase(StringValue{value: subject}))),
+    // <string value>.swap_case()
+    "swap_case" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncSwapCase(StringValue{value: subject}))),
 
-    // <string value>.trainCase()
-    "trainCase" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncTrainCase(StringValue{value: subject}))),
+    // <string value>.to_train_case()
+    "to_train_case" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncTrainCase(StringValue{value: subject}))),
 
-    // <string value>.pascalCase()
-    "pascalCase" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncPascalCase(StringValue{value: subject}))),
+    // <string value>.to_pascal_case()
+    "to_pascal_case" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncPascalCase(StringValue{value: subject}))),
 
-    // <string value>.shoutyKebabCase()
-    "shoutyKebabCase" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncShoutyKebabCase(StringValue{value: subject}))),
+    // <string value>.to_shouty_kebab_case()
+    "to_shouty_kebab_case" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncShoutyKebabCase(StringValue{value: subject}))),
 
-    // <string value>.shoutySnakeCase()
-    "shoutySnakeCase" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncShoutySnakeCase(StringValue{value: subject}))),
+    // <string value>.to_shouty_snake_cse()
+    "to_shouty_snake_cse" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncShoutySnakeCase(StringValue{value: subject}))),
 
     // <string value>.md5()
     "md5" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncMD5(StringValue{value: subject}))),
@@ -366,50 +426,50 @@ Expr90: Box<Expression> = {
     // <string value>.sha256()
     "sha256" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncSHA256(StringValue{value: subject}))),
 
-    // <string value>.isDecimal()
-    "isDecimal" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsDecimal(StringValue{value: subject}))),
+    // <string value>.is_decimal()
+    "is_decimal" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsDecimal(StringValue{value: subject}))),
 
-    // <string value>.isAlphaNum()
-    "isAlphaNum" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsAlphaNum(StringValue{value: subject}))),
+    // <string value>.is_alpha_num()
+    "is_alpha_num" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsAlphaNum(StringValue{value: subject}))),
 
-    // <string value>.isAlpha()
-    "isAlpha" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsAlpha(StringValue{value: subject}))),
+    // <string value>.is_alpha()
+    "is_alpha" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsAlpha(StringValue{value: subject}))),
 
-    // <string value>.isDigit()
-    "isDigit" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsDigit(StringValue{value: subject}))),
+    // <string value>.is_digit()
+    "is_digit" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsDigit(StringValue{value: subject}))),
 
-    // <string value>.isNumeric()
-    "isNumeric" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsNumeric(StringValue{value: subject}))),
+    // <string value>.is_numeric()
+    "is_numeric" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsNumeric(StringValue{value: subject}))),
 
-    // <string value>.isSpace()
-    "isSpace" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsSpace(StringValue{value: subject}))),
+    // <string value>.is_space()
+    "is_space" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsSpace(StringValue{value: subject}))),
 
-    // <string value>.isIdentifier()
-    "isIdentifier" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsIdentifier(StringValue{value: subject}))),
+    // <string value>.is_identifier()
+    "is_identifier" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsIdentifier(StringValue{value: subject}))),
 
-    // <string value>.isLowerCase()
-    "isLowerCase" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsLowerCase(StringValue{value: subject}))),
+    // <string value>.is_lower_case()
+    "is_lower_case" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsLowerCase(StringValue{value: subject}))),
 
-    // <string value>.isUpperCase()
-    "isUpperCase" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsUpperCase(StringValue{value: subject}))),
+    // <string value>.is_upper_case()
+    "is_upper_case" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsUpperCase(StringValue{value: subject}))),
 
-    // <string value>.isTitleCase()
-    "isTitleCase" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsTitleCase(StringValue{value: subject}))),
+    // <string value>.is_title_case()
+    "is_title_case" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsTitleCase(StringValue{value: subject}))),
 
-    // <string value>.isSnakeCase()
-    "isSnakeCase" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsSnakeCase(StringValue{value: subject}))),
+    // <string value>.is_snake_case()
+    "is_snake_case" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsSnakeCase(StringValue{value: subject}))),
 
-    // <string value>.isTrainCase()
-    "isTrainCase" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsTrainCase(StringValue{value: subject}))),
+    // <string value>.is_train_case()
+    "is_train_case" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsTrainCase(StringValue{value: subject}))),
 
-    // <string value>.isPascalCase()
-    "isPascalCase" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsPascalCase(StringValue{value: subject}))),
+    // <string value>.is_pascal_case()
+    "is_pascal_case" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsPascalCase(StringValue{value: subject}))),
 
-    // <string value>.isShoutyKebabCase()
-    "isShoutyKebabCase" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsShoutyKebabCase(StringValue{value: subject}))),
+    // <string value>.is_shouty_kebab_case()
+    "is_shouty_kebab_case" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsShoutyKebabCase(StringValue{value: subject}))),
 
-    // <string value>.isShoutySnakeCase()
-    "isShoutySnakeCase" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsShoutySnakeCase(StringValue{value: subject}))),
+    // <string value>.is_shouty_snake_case()
+    "is_shouty_snake_case" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsShoutySnakeCase(StringValue{value: subject}))),
 
     // <string value>.strip()
     "strip" "(" <subject: Expression> <with: ("," <Expression>)?> ")" => Box::new(Expression::StdFunction(StdFunction::FuncStrip{subject: StringValue{value: subject}, with: with.map(|s| StringValue{value: s})})),
@@ -420,11 +480,11 @@ Expr90: Box<Expression> = {
     // <string value>.rstrip()
     "rstrip" "(" <subject: Expression> <with: ("," <Expression>)?> ")" => Box::new(Expression::StdFunction(StdFunction::FuncRStrip{subject: StringValue{value: subject}, with: with.map(|s| StringValue{value: s})})),
 
-    // <string value>.endsWith()
-    "endsWith" "(" <subject: Expression> "," <with: Expression> <start:("," "start" "=" <Expression>)?> <end:("," "end" "=" <Expression>)?> ")" => Box::new(Expression::StdFunction(StdFunction::FuncEndsWith{subject: StringValue{value: subject}, with: StringValue{value: with}, start: start.map(|s| NumericValue{value: s}), end: end.map(|s| NumericValue{value: s})})),
+    // <string value>.ends_with()
+    "ends_with" "(" <subject: Expression> "," <with: Expression> <start:("," "start" "=" <Expression>)?> <end:("," "end" "=" <Expression>)?> ")" => Box::new(Expression::StdFunction(StdFunction::FuncEndsWith{subject: StringValue{value: subject}, with: StringValue{value: with}, start: start.map(|s| NumericValue{value: s}), end: end.map(|s| NumericValue{value: s})})),
 
-    // <string value>.startsWith()
-    "startsWith" "(" <subject: Expression> "," <with: Expression> <start:("," "start" "=" <Expression>)?> <end:("," "end" "=" <Expression>)?> ")" => Box::new(Expression::StdFunction(StdFunction::FuncStartsWith{subject: StringValue{value: subject}, with: StringValue{value: with}, start: start.map(|s| NumericValue{value: s}), end: end.map(|s| NumericValue{value: s})})),
+    // <string value>.starts_with()
+    "starts_with" "(" <subject: Expression> "," <with: Expression> <start:("," "start" "=" <Expression>)?> <end:("," "end" "=" <Expression>)?> ")" => Box::new(Expression::StdFunction(StdFunction::FuncStartsWith{subject: StringValue{value: subject}, with: StringValue{value: with}, start: start.map(|s| NumericValue{value: s}), end: end.map(|s| NumericValue{value: s})})),
 
     // <string value>.split()
     "split" "(" <subject: Expression> "," <with: Expression> <num_splits:("," "num_splits" "=" <Expression>)?> ")" => Box::new(Expression::StdFunction(StdFunction::FuncSplit{subject: StringValue{value: subject}, with: StringValue{value: with}, num_splits: num_splits.map(|s| NumericValue{value: s})})),
@@ -473,6 +533,240 @@ Expr90: Box<Expression> = {
 
     // utc_datetime.from_timestamp_millis(<numeric value>)
     "utc_datetime" "." "from_timestamp_millis" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncUtcDateTimeFromTimestampMillis(NumericValue{value: subject}))),
+
+    // local_datetime(y, m, d, h, mm, ss, ms, us)
+    "local_datetime" "(" <args: PositionalArgs> ")" =>? {
+        let mut y = None;
+        let mut m = None;
+        let mut d = None;
+        let mut h = None;
+        let mut mm = None;
+        let mut ss = None;
+        let mut ms = None;
+        let mut us = None;
+
+        for (name, arg) in args.into_iter() {
+         let value = Some(NumericValue{value: arg});
+         match name.as_str() {
+             "y" => {
+                 y = value;
+             },
+             "m" => {
+                 m = value;
+             },
+             "d" => {
+                 d = value;
+             },
+             "h" => {
+                 h = value;
+             },
+             "mm" => {
+                 mm = value;
+             },
+             "ss" => {
+                 ss = value;
+             },
+             "ms" => {
+                 ms = value;
+             },
+             "us" => {
+                  us = value;
+              },
+
+             _ => {
+                 return Err(ParseError::User{error: "Unknown argument to local_datetime"});
+             }
+         }
+        }
+
+        let datetime_fn = StdFunction::FuncLocalDateTime{y, m, d, h, mm, ss, ms, us};
+
+        Ok(Box::new(Expression::StdFunction(datetime_fn)))
+    },
+
+    // utc_datetime(y, m, d, h, mm, ss, ms, us)
+    "utc_datetime" "(" <args: PositionalArgs> ")" =>? {
+        let mut y = None;
+        let mut m = None;
+        let mut d = None;
+        let mut h = None;
+        let mut mm = None;
+        let mut ss = None;
+        let mut ms = None;
+        let mut us = None;
+
+        for (name, arg) in args.into_iter() {
+         let value = Some(NumericValue{value: arg});
+         match name.as_str() {
+             "y" => {
+                 y = value;
+             },
+             "m" => {
+                 m = value;
+             },
+             "d" => {
+                 d = value;
+             },
+             "h" => {
+                 h = value;
+             },
+             "mm" => {
+                 mm = value;
+             },
+             "ss" => {
+                 ss = value;
+             },
+             "ms" => {
+                 ms = value;
+             },
+             "us" => {
+                  us = value;
+              },
+
+             _ => {
+                 return Err(ParseError::User{error: "Unknown argument to utc_datetime"});
+             }
+         }
+        }
+
+        let datetime_fn = StdFunction::FuncUtcDateTime{y, m, d, h, mm, ss, ms, us};
+
+        Ok(Box::new(Expression::StdFunction(datetime_fn)))
+    },
+
+    // date(y, m, d)
+    "date" "(" <args: PositionalArgs> ")" =>? {
+        let mut y = None;
+        let mut m = None;
+        let mut d = None;
+
+        for (name, arg) in args.into_iter() {
+         let value = Some(NumericValue{value: arg});
+         match name.as_str() {
+             "y" => {
+                 y = value;
+             },
+             "m" => {
+                 m = value;
+             },
+             "d" => {
+                 d = value;
+             },
+
+             _ => {
+                 return Err(ParseError::User{error: "Unknown argument to date"});
+             }
+         }
+        }
+
+        let date_fn = StdFunction::FuncDate{y, m, d};
+
+        Ok(Box::new(Expression::StdFunction(date_fn)))
+    },
+
+    // time(h, mm, ss, ms, us)
+    "time" "(" <args: PositionalArgs> ")" =>? {
+        let mut h = None;
+        let mut mm = None;
+        let mut ss = None;
+        let mut ms = None;
+        let mut us = None;
+
+        for (name, arg) in args.into_iter() {
+         let value = Some(NumericValue{value: arg});
+         match name.as_str() {
+             "h" => {
+                 h = value;
+             },
+             "mm" => {
+                 mm = value;
+             },
+             "ss" => {
+                 ss = value;
+             },
+             "ms" => {
+                 ms = value;
+             },
+             "us" => {
+                  us = value;
+              },
+
+             _ => {
+                 return Err(ParseError::User{error: "Unknown argument to time"});
+             }
+         }
+        }
+
+        let time_fn = StdFunction::FuncTime{h, mm, ss, ms, us};
+
+        Ok(Box::new(Expression::StdFunction(time_fn)))
+    },
+
+    // parse_duration(<string value>)
+    "parse_duration" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncParseDuration(StringValue{value: subject}))),
+
+    // sem_version(<string value>)
+    "sem_version" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncSemVersion(StringValue{value: subject}))),
+
+    // get_date(<datetime value>)
+    "get_date" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncGetDateFromDateTime(DateTimeValue{value: subject}))),
+
+    // get_time(<datetime value>)
+    "get_time" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncGetTimeFromDateTime(DateTimeValue{value: subject}))),
+
+    // get_timestamp(<datetime value>)
+    "get_timestamp" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncGetTimestampFromDateTime(DateTimeValue{value: subject}))),
+
+    // get_timestamp_millis(<datetime value>)
+    "get_timestamp_millis" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncGetTimestampMillisFromDateTime(DateTimeValue{value: subject}))),
+
+    // get_year(<datelike value>)
+    "get_year" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncGetYearFromDate(DateLikeValue{value: subject}))),
+
+    // get_month(<datelike value>)
+    "get_month" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncGetMonthFromDate(DateLikeValue{value: subject}))),
+
+    // get_day_of_month(<datelike value>)
+    "get_day_of_month" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncGetDayOfMonthFromDate(DateLikeValue{value: subject}))),
+
+    // get_day_of_year(<datelike value>)
+    "get_day_of_year" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncGetDayOfYearFromDate(DateLikeValue{value: subject}))),
+
+    // get_day_of_week(<datelike value>)
+    "get_day_of_week" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncGetDayOfWeekFromDate(DateLikeValue{value: subject}))),
+
+    // get_hour(<timelike value>)
+    "get_hour" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncGetHourFromTime(TimeLikeValue{value: subject}))),
+
+    // get_minute(<timelike value>)
+    "get_minute" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncGetMinuteFromTime(TimeLikeValue{value: subject}))),
+
+    // get_second(<timelike value>)
+    "get_second" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncGetSecondFromTime(TimeLikeValue{value: subject}))),
+
+    // get_millisecond(<timelike value>)
+    "get_millisecond" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncGetMillisecondFromTime(TimeLikeValue{value: subject}))),
+
+    // get_weeks(<duration value>)
+    "get_weeks" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncGetWeeksFromDuration(DurationValue{value: subject}))),
+
+    // get_days(<duration value>)
+    "get_days" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncGetDaysFromDuration(DurationValue{value: subject}))),
+
+    // get_hours(<duration value>)
+    "get_hours" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncGetHoursFromDuration(DurationValue{value: subject}))),
+
+    // get_minutes(<duration value>)
+    "get_minutes" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncGetMinutesFromDuration(DurationValue{value: subject}))),
+
+    // get_seconds(<duration value>)
+    "get_seconds" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncGetSecondsFromDuration(DurationValue{value: subject}))),
+
+    // get_milliseconds(<duration value>)
+    "get_milliseconds" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncGetMillisecondsFromDuration(DurationValue{value: subject}))),
+
+    // get_microseconds(<duration value>)
+    "get_microseconds" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncGetMicrosecondsFromDuration(DurationValue{value: subject}))),
 
     <name: Identifier> <args: FnArgs> => Box::new(Expression::CustomFunction{name, args}),
 
