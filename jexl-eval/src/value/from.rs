@@ -294,17 +294,6 @@ impl From<semver::Version> for Value {
 }
 
 impl From<serde_json::Value> for Value {
-    /// Convert map (with string keys) to `Value`
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use serde_json::{Map, Value};
-    ///
-    /// let mut m = Map::new();
-    /// m.insert("Lorem".to_string(), "ipsum".into());
-    /// let x: Value = m.into();
-    /// ```
     fn from(f: serde_json::Value) -> Self {
         match f {
             serde_json::Value::Null => Value::Null,
@@ -313,6 +302,19 @@ impl From<serde_json::Value> for Value {
             serde_json::Value::String(v) => Value::String(v),
             serde_json::Value::Array(v) => Value::Array(v.into_iter().map(|e| e.into()).collect()),
             serde_json::Value::Object(v) => Value::Object(v.into_iter().map(|(k, e)| (k, e.into())).collect()),
+        }
+    }
+}
+
+impl From<&serde_json::Value> for Value {
+    fn from(f: &serde_json::Value) -> Self {
+        match f {
+            serde_json::Value::Null => Value::Null,
+            serde_json::Value::Bool(v) => Value::Bool(*v),
+            serde_json::Value::Number(v) => Value::Number(v.clone()),
+            serde_json::Value::String(v) => Value::String(v.to_string()),
+            serde_json::Value::Array(v) => Value::Array(v.iter().map(|e| e.into()).collect()),
+            serde_json::Value::Object(v) => Value::Object(v.iter().map(|(k, e)| (k.to_string(), e.into())).collect()),
         }
     }
 }

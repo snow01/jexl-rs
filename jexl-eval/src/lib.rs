@@ -44,7 +44,7 @@ use jexl_parser::{
     Parser,
 };
 use jexl_parser::ast::{ArrayValue, DateTimeValue, DateLikeValue, DurationValue, NumericValue, StdFunction, StringValue, TimeLikeValue};
-pub use value::{Number, Value, DateTime};
+pub use value::{Number, Value, DateTime, to_value};
 use semver::Version;
 
 pub mod error;
@@ -93,7 +93,7 @@ type EvaluationContext = Value;
 ///
 /// Returns a Result with an `anyhow::Error`. This allows consumers to return their own custom errors
 /// in the closure, and use `.into` to convert it into an `anyhow::Error`. The error message will be perserved
-pub type TransformFn = Box<dyn Fn(Option<&[Value]>) -> Result<Value, anyhow::Error>>;
+pub type TransformFn = Box<dyn Fn(Option<&[Value]>) -> Result<Value, anyhow::Error> + Send + Sync>;
 
 #[derive(Default)]
 pub struct Evaluator {
@@ -134,7 +134,7 @@ impl Evaluator {
     /// ```
     pub fn with_transform<F>(mut self, name: &str, transform: F) -> Self
         where
-            F: Fn(Option<&[Value]>) -> Result<Value, anyhow::Error> + 'static,
+            F: Fn(Option<&[Value]>) -> Result<Value, anyhow::Error> + 'static + Send + Sync,
     {
         self.transforms
             .insert(name.to_string(), Box::new(transform));
