@@ -4,18 +4,23 @@
 
 use jexl_parser::{ast::OpCode, ParseError, Token};
 
-use serde_json::Value;
+use crate::value::Value;
 
 pub type Result<'a, T, E = EvaluationError<'a>> = std::result::Result<T, E>;
 #[derive(Debug, thiserror::Error)]
 pub enum EvaluationError<'a> {
     #[error("Parsing error: {0}")]
     ParseError(Box<ParseError<usize, Token<'a>, &'a str>>),
-    #[error("Invalid binary operation, left: {left}, right: {right}, operation: {operation}")]
+
+    #[error("Invalid binary operation, left: {left:?}, right: {right:?}, operation: {operation}")]
     InvalidBinaryOp {
         left: Value,
         right: Value,
         operation: OpCode,
+    },
+    #[error("Invalid negation operation, expr: {value:?}")]
+    InvalidNegationOp {
+        value: Value,
     },
     #[error("Unknown transform: {0}")]
     UnknownTransform(String),
@@ -31,6 +36,12 @@ pub enum EvaluationError<'a> {
     CustomError(#[from] anyhow::Error),
     #[error("Invalid filter")]
     InvalidFilter,
+
+    #[error("Invalid value type, expected: {expected}, got: {got}")]
+    InvalidValueType {
+        expected: String,
+        got: String,
+    }
 }
 
 impl<'a> From<ParseError<usize, Token<'a>, &'a str>> for EvaluationError<'a> {

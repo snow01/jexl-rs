@@ -8,5 +8,5 @@ license = "MPL-2.0"
 repository = "https://github.com/mozilla/jexl-rs"
 
 [dependencies]
-lalrpop-util = { version = "0.19", features = ["lexer"] }
-regex = "1.3"
+lalrpop-util = { version = "0.19.6", features = ["lexer"] }
+regex = "1.5.4"

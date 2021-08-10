@@ -1,18 +1,19 @@
 use std::str::FromStr;
+use lalrpop_util::ParseError;
 
-use crate::ast::{Expression, OpCode};
+use crate::ast::{Expression, OpCode, StdFunction, NumericValue, StringValue, ArrayValue, DateTimeValue, DateValue, TimeValue, DurationValue};
 
 grammar;
 
 pub Expression: Box<Expression> = Expr00;
 
 Expr00: Box<Expression> = {
-    <left: Expression> <operation: Op10> <right: Expr10> => Box::new(Expression::BinaryOperation { left, right, operation }),
+    <left: Expression> <operation: LogicalOp> <right: Expr10> => Box::new(Expression::BinaryOperation { left, right, operation }),
     Expr10,
 };
 
 Expr10: Box<Expression> = {
-    <left: Expr10> <operation: Op20> <right: Expr20> => Box::new(Expression::BinaryOperation { left, right, operation }),
+    <left: Expr10> <operation: ComparisonOp> <right: Expr20> => Box::new(Expression::BinaryOperation { left, right, operation }),
     Expr20,
 };
 
@@ -32,15 +33,20 @@ Expr40: Box<Expression> = {
 };
 
 Expr50: Box<Expression> = {
-    <left: Expr50> "?" <truthy: Expr60> ":" <falsy: Expr60> => Box::new(Expression::Conditional {left, truthy, falsy}),
+    <left: Expr50> "?" <truthy: Expr60> ":" <falsy: Expr70> => Box::new(Expression::Conditional {left, truthy, falsy}),
     Expr60,
 }
 
 Expr60: Box<Expression> = {
-    <subject: Expr60> "|" <name: Identifier> <args: Args?> => Box::new(Expression::Transform{name, subject, args}),
+    <subject: Expr60> "|" <name: Identifier> <args: FnArgs> => Box::new(Expression::CustomTransform{name, subject, args}),
     Expr70
 };
 
+Expr70: Box<Expression> = {
+    "not " <expr: Expr70>  => Box::new(Expression::NegationOperation{expr}),
+    "!" <expr: Expr70>  => Box::new(Expression::NegationOperation{expr}),
+    Expr80
+};
 
 /// Expression for dereferencing.
 /// Used for dereferencing object literals, array literals, and the context
@@ -64,38 +70,465 @@ Expr60: Box<Expression> = {
 /// `foo.bar[0] == {"baz": 1}`
 /// `foo.bar[1].bobo[0] == 13`
 /// `[1, 2, 3][1] == 2`
-Expr70: Box<Expression> = {
-    <subject: Expr70> <index: Index> => Box::new(Expression::IndexOperation{subject, index}),
-    <subject: Expr70> "." <ident: Identifier>  => Box::new(Expression::DotOperation{subject, ident}),
-    Expr80
+Expr80: Box<Expression> = {
+    // <array value>.any()
+    <subject: Expr80> "." "any" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncAny(ArrayValue{array: subject}))),
+
+    // <array value>.all()
+    <subject: Expr80> "." "all" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncAll(ArrayValue{array: subject}))),
+
+    // <array value>.max()
+    <subject: Expr80> "." "max" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncMax(ArrayValue{array: subject}))),
+
+    // <array value>.min()
+    <subject: Expr80> "." "min" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncMin(ArrayValue{array: subject}))),
+
+    // <array value>.sum()
+    <subject: Expr80> "." "sum" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncSum(ArrayValue{array: subject}))),
+
+    // <array or string value>.len()
+    <subject: Expr80> "." "len" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncLen(subject))),
+
+    // <array or string value>.isEmpty()
+    <subject: Expr80> "." "isEmpty" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsEmpty(subject))),
+
+    // <string value>.capitalise()
+    <subject: Expr80> "." "capitalise" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncCapitalise(StringValue{value: subject}))),
+
+    // <string value>.upperCase()
+    <subject: Expr80> "." "upperCase" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncUpperCase(StringValue{value: subject}))),
+
+    // <string value>.lowerCase()
+    <subject: Expr80> "." "lowerCase" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncLowerCase(StringValue{value: subject}))),
+
+    // <string value>.titleCase()
+    <subject: Expr80> "." "titleCase" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncTitleCase(StringValue{value: subject}))),
+
+    // <string value>.kebabCase()
+    <subject: Expr80> "." "kebabCase" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncKebabCase(StringValue{value: subject}))),
+
+    // <string value>.snakeCase()
+    <subject: Expr80> "." "snakeCase" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncSnakeCase(StringValue{value: subject}))),
+
+    // <string value>.swapCase()
+    <subject: Expr80> "." "swapCase" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncSwapCase(StringValue{value: subject}))),
+
+    // <string value>.trainCase()
+    <subject: Expr80> "." "trainCase" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncTrainCase(StringValue{value: subject}))),
+
+    // <string value>.pascalCase()
+    <subject: Expr80> "." "pascalCase" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncPascalCase(StringValue{value: subject}))),
+
+    // <string value>.shoutyKebabCase()
+    <subject: Expr80> "." "shoutyKebabCase" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncShoutyKebabCase(StringValue{value: subject}))),
+
+    // <string value>.shoutySnakeCase()
+    <subject: Expr80> "." "shoutySnakeCase" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncShoutySnakeCase(StringValue{value: subject}))),
+
+    // <string value>.md5()
+    <subject: Expr80> "." "md5" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncMD5(StringValue{value: subject}))),
+
+    // <string value>.sha256()
+    <subject: Expr80> "." "sha256" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncSHA256(StringValue{value: subject}))),
+
+    // <string value>.isDecimal()
+    <subject: Expr80> "." "isDecimal" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsDecimal(StringValue{value: subject}))),
+
+    // <string value>.isAlphaNum()
+    <subject: Expr80> "." "isAlphaNum" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsAlphaNum(StringValue{value: subject}))),
+
+    // <string value>.isAlpha()
+    <subject: Expr80> "." "isAlpha" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsAlpha(StringValue{value: subject}))),
+
+    // <string value>.isDigit()
+    <subject: Expr80> "." "isDigit" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsDigit(StringValue{value: subject}))),
+
+    // <string value>.isNumeric()
+    <subject: Expr80> "." "isNumeric" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsNumeric(StringValue{value: subject}))),
+
+    // <string value>.isSpace()
+    <subject: Expr80> "." "isSpace" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsSpace(StringValue{value: subject}))),
+
+    // <string value>.isIdentifier()
+    <subject: Expr80> "." "isIdentifier" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsIdentifier(StringValue{value: subject}))),
+
+    // <string value>.isLowerCase()
+    <subject: Expr80> "." "isLowerCase" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsLowerCase(StringValue{value: subject}))),
+
+    // <string value>.isUpperCase()
+    <subject: Expr80> "." "isUpperCase" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsUpperCase(StringValue{value: subject}))),
+
+    // <string value>.isTitleCase()
+    <subject: Expr80> "." "isTitleCase" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsTitleCase(StringValue{value: subject}))),
+
+    // <string value>.isSnakeCase()
+    <subject: Expr80> "." "isSnakeCase" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsSnakeCase(StringValue{value: subject}))),
+
+    // <string value>.isTrainCase()
+    <subject: Expr80> "." "isTrainCase" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsTrainCase(StringValue{value: subject}))),
+
+    // <string value>.isPascalCase()
+    <subject: Expr80> "." "isPascalCase" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsPascalCase(StringValue{value: subject}))),
+
+    // <string value>.isShoutyKebabCase()
+    <subject: Expr80> "." "isShoutyKebabCase" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsShoutyKebabCase(StringValue{value: subject}))),
+
+    // <string value>.isShoutySnakeCase()
+    <subject: Expr80> "." "isShoutySnakeCase" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsShoutySnakeCase(StringValue{value: subject}))),
+
+    // <string value>.strip()
+    <subject: Expr80> "." "strip" "(" <with: Expression?> ")" => Box::new(Expression::StdFunction(StdFunction::FuncStrip{subject: StringValue{value: subject}, with: with.map(|s| StringValue{value: s})})),
+
+    // <string value>.lstrip()
+    <subject: Expr80> "." "lstrip" "(" <with: Expression?> ")" => Box::new(Expression::StdFunction(StdFunction::FuncLStrip{subject: StringValue{value: subject}, with: with.map(|s| StringValue{value: s})})),
+
+    // <string value>.rstrip()
+    <subject: Expr80> "." "rstrip" "(" <with: Expression?> ")" => Box::new(Expression::StdFunction(StdFunction::FuncRStrip{subject: StringValue{value: subject}, with: with.map(|s| StringValue{value: s})})),
+
+    // <string value>.endsWith()
+    <subject: Expr80> "." "endsWith" "(" <with: Expression> <start:("," "start" "=" <Expression>)?> <end:("," "end" "=" <Expression>)?> ")" => Box::new(Expression::StdFunction(StdFunction::FuncEndsWith{subject: StringValue{value: subject}, with: StringValue{value: with}, start: start.map(|s| NumericValue{value: s}), end: end.map(|s| NumericValue{value: s})})),
+
+    // <string value>.startsWith()
+    <subject: Expr80> "." "startsWith" "(" <with: Expression> <start:("," "start" "=" <Expression>)?> <end:("," "end" "=" <Expression>)?> ")" => Box::new(Expression::StdFunction(StdFunction::FuncStartsWith{subject: StringValue{value: subject}, with: StringValue{value: with}, start: start.map(|s| NumericValue{value: s}), end: end.map(|s| NumericValue{value: s})})),
+
+    // <string value>.split()
+    <subject: Expr80> "." "split" "(" <with: Expression> <num_splits:("," "num_splits" "=" <Expression>)?> ")" => Box::new(Expression::StdFunction(StdFunction::FuncSplit{subject: StringValue{value: subject}, with: StringValue{value: with}, num_splits: num_splits.map(|s| NumericValue{value: s})})),
+
+    // <string value>.words()
+    <subject: Expr80> "." "split" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncWords(StringValue{value: subject}))),
+
+    // <string value>.index()
+    <subject: Expr80> "." "index" "(" <search: Expression> <start:("," "start" "=" <Expression>)?> <end:("," "end" "=" <Expression>)?> ")" => Box::new(Expression::StdFunction(StdFunction::FuncIndex{subject: StringValue{value: subject}, search: StringValue{value: search}, start: start.map(|s| NumericValue{value: s}), end: end.map(|s| NumericValue{value: s})})),
+
+    // <string value>.rindex()
+    <subject: Expr80> "." "rindex" "(" <search: Expression> <start:("," "start" "=" <Expression>)?> <end:("," "end" "=" <Expression>)?> ")" => Box::new(Expression::StdFunction(StdFunction::FuncRIndex{subject: StringValue{value: subject}, search: StringValue{value: search}, start: start.map(|s| NumericValue{value: s}), end: end.map(|s| NumericValue{value: s})})),
+
+    // <string value>.find()
+    <subject: Expr80> "." "find" "(" <search: Expression> <start:("," "start" "=" <Expression>)?> <end:("," "end" "=" <Expression>)?> ")" => Box::new(Expression::StdFunction(StdFunction::FuncFind{subject: StringValue{value: subject}, search: StringValue{value: search}, start: start.map(|s| NumericValue{value: s}), end: end.map(|s| NumericValue{value: s})})),
+
+    // <string value>.rfind()
+    <subject: Expr80> "." "rfind" "(" <search: Expression> <start:("," "start" "=" <Expression>)?> <end:("," "end" "=" <Expression>)?> ")" => Box::new(Expression::StdFunction(StdFunction::FuncRFind{subject: StringValue{value: subject}, search: StringValue{value: search}, start: start.map(|s| NumericValue{value: s}), end: end.map(|s| NumericValue{value: s})})),
+
+    // <numeric value>.hex()
+    <subject: Expr80> "." "hex" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncHex(NumericValue{value: subject}))),
+
+    // <numeric value>.oct()
+    <subject: Expr80> "." "oct" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncOct(NumericValue{value: subject}))),
+
+    // <numeric value>.abs()
+    <subject: Expr80> "." "abs" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncAbs(NumericValue{value: subject}))),
+
+    // <numeric value>.round()
+    <subject: Expr80> "." "round" "(" <num_digits: Expression?> ")" => Box::new(Expression::StdFunction(StdFunction::FuncRound(NumericValue{value: subject}, num_digits.map(|n| NumericValue{value: n})))),
+
+    // <string value>.to_local_datetime()
+    <subject: Expr80> "." "to_local_datetime" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncParseLocalDateTime(StringValue{value: subject}))),
+
+    // <string or numeric value>.to_utc_datetime()
+    <subject: Expr80> "." "to_utc_datetime" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncParseUtcDateTime(StringValue{value: subject}))),
+
+    <subject: Expr80> "." <name: Identifier> <args: FnArgs> => Box::new(Expression::CustomTransform{name, subject, args}),
+
+    <subject: Expr80> <index: Index> => Box::new(Expression::IndexOperation{subject, index}),
+
+    // dot operation with default value
+    <subject: Expr80> "." "get" "(" <ident: Identifier> "," <default_value: Expression> ")"  => Box::new(Expression::DotOperation{subject, ident, default_value: Some(default_value)}),
+
+    // TODO: check whether String is identifier string
+    <subject: Expr80> "." "get" "(" <ident: String> "," <default_value: Expression> ")"  => Box::new(Expression::DotOperation{subject, ident, default_value: Some(default_value)}),
+
+    // dot operation
+    <subject: Expr80> "." <ident: Identifier>  => Box::new(Expression::DotOperation{subject, ident, default_value: None}),
+
+    Expr90
 };
 
-Expr80: Box<Expression> = {
+Expr90: Box<Expression> = {
     Number => Box::new(Expression::Number(<>)),
     Boolean => Box::new(Expression::Boolean(<>)),
     String => Box::new(Expression::String(<>)),
     Array => Box::new(Expression::Array(<>)),
     Object => Box::new(Expression::Object(<>)),
     Identifier => Box::new(Expression::Identifier(<>)),
+
+    // duration with no args
+    "duration" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncDuration{days: None, hours: None, minutes: None, seconds: None, milliseconds: None, microseconds: None, weeks: None})),
+
+    // duration with positional args
+    "duration" "(" <args: PositionalArgs> ")" =>? {
+        let mut days = None;
+        let mut hours = None;
+        let mut minutes = None;
+        let mut seconds = None;
+        let mut milliseconds = None;
+        let mut microseconds = None;
+        let mut weeks = None;
+
+        for (name, arg) in args.into_iter() {
+            let value = Some(NumericValue{value: arg});
+            match name.as_str() {
+                "days" => {
+                    days = value;
+                },
+                "hours" => {
+                    hours = value;
+                },
+                "minutes" => {
+                    minutes = value;
+                },
+                "seconds" => {
+                    seconds = value;
+                },
+                "milliseconds" => {
+                    milliseconds = value;
+                },
+                "microseconds" => {
+                    microseconds = value;
+                },
+                "weeks" => {
+                    weeks = value;
+                },
+
+                _ => {
+                    return Err(ParseError::User{error: "Unknown argument to duration"});
+                }
+            }
+        }
+
+        let duration_fn = StdFunction::FuncDuration{days, hours, minutes, seconds, milliseconds, microseconds, weeks};
+
+        Ok(Box::new(Expression::StdFunction(duration_fn)))
+    },
+
+    // local_now()
+    "local_now" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncLocalNow())),
+
+    // utc_now()
+    "utc_now" "(" ")" => Box::new(Expression::StdFunction(StdFunction::FuncUtcNow())),
+
+    // <array value>.any()
+    "any" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncAny(ArrayValue{array: subject}))),
+
+    // <array value>.all()
+    "all" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncAll(ArrayValue{array: subject}))),
+
+    // <array value>.max()
+    "max" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncMax(ArrayValue{array: subject}))),
+
+    // <array value>.min()
+    "min" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncMin(ArrayValue{array: subject}))),
+
+    // <array value>.sum()
+    "sum" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncSum(ArrayValue{array: subject}))),
+
+    // <array or string value>.len()
+    "len" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncLen(subject))),
+
+    // <array or string value>.isEmpty()
+    "isEmpty" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsEmpty(subject))),
+
+    // <string value>.capitalise()
+    "capitalise" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncCapitalise(StringValue{value: subject}))),
+
+    // <string value>.upperCase()
+    "upperCase" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncUpperCase(StringValue{value: subject}))),
+
+    // <string value>.lowerCase()
+    "lowerCase" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncLowerCase(StringValue{value: subject}))),
+
+    // <string value>.titleCase()
+    "titleCase" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncTitleCase(StringValue{value: subject}))),
+
+    // <string value>.kebabCase()
+    "kebabCase" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncKebabCase(StringValue{value: subject}))),
+
+    // <string value>.snakeCase()
+    "snakeCase" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncSnakeCase(StringValue{value: subject}))),
+
+    // <string value>.swapCase()
+    "swapCase" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncSwapCase(StringValue{value: subject}))),
+
+    // <string value>.trainCase()
+    "trainCase" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncTrainCase(StringValue{value: subject}))),
+
+    // <string value>.pascalCase()
+    "pascalCase" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncPascalCase(StringValue{value: subject}))),
+
+    // <string value>.shoutyKebabCase()
+    "shoutyKebabCase" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncShoutyKebabCase(StringValue{value: subject}))),
+
+    // <string value>.shoutySnakeCase()
+    "shoutySnakeCase" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncShoutySnakeCase(StringValue{value: subject}))),
+
+    // <string value>.md5()
+    "md5" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncMD5(StringValue{value: subject}))),
+
+    // <string value>.sha256()
+    "sha256" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncSHA256(StringValue{value: subject}))),
+
+    // <string value>.isDecimal()
+    "isDecimal" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsDecimal(StringValue{value: subject}))),
+
+    // <string value>.isAlphaNum()
+    "isAlphaNum" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsAlphaNum(StringValue{value: subject}))),
+
+    // <string value>.isAlpha()
+    "isAlpha" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsAlpha(StringValue{value: subject}))),
+
+    // <string value>.isDigit()
+    "isDigit" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsDigit(StringValue{value: subject}))),
+
+    // <string value>.isNumeric()
+    "isNumeric" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsNumeric(StringValue{value: subject}))),
+
+    // <string value>.isSpace()
+    "isSpace" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsSpace(StringValue{value: subject}))),
+
+    // <string value>.isIdentifier()
+    "isIdentifier" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsIdentifier(StringValue{value: subject}))),
+
+    // <string value>.isLowerCase()
+    "isLowerCase" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsLowerCase(StringValue{value: subject}))),
+
+    // <string value>.isUpperCase()
+    "isUpperCase" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsUpperCase(StringValue{value: subject}))),
+
+    // <string value>.isTitleCase()
+    "isTitleCase" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsTitleCase(StringValue{value: subject}))),
+
+    // <string value>.isSnakeCase()
+    "isSnakeCase" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsSnakeCase(StringValue{value: subject}))),
+
+    // <string value>.isTrainCase()
+    "isTrainCase" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsTrainCase(StringValue{value: subject}))),
+
+    // <string value>.isPascalCase()
+    "isPascalCase" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsPascalCase(StringValue{value: subject}))),
+
+    // <string value>.isShoutyKebabCase()
+    "isShoutyKebabCase" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsShoutyKebabCase(StringValue{value: subject}))),
+
+    // <string value>.isShoutySnakeCase()
+    "isShoutySnakeCase" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncIsShoutySnakeCase(StringValue{value: subject}))),
+
+    // <string value>.strip()
+    "strip" "(" <subject: Expression> <with: ("," <Expression>)?> ")" => Box::new(Expression::StdFunction(StdFunction::FuncStrip{subject: StringValue{value: subject}, with: with.map(|s| StringValue{value: s})})),
+
+    // <string value>.lstrip()
+    "lstrip" "(" <subject: Expression> <with: ("," <Expression>)?> ")" => Box::new(Expression::StdFunction(StdFunction::FuncLStrip{subject: StringValue{value: subject}, with: with.map(|s| StringValue{value: s})})),
+
+    // <string value>.rstrip()
+    "rstrip" "(" <subject: Expression> <with: ("," <Expression>)?> ")" => Box::new(Expression::StdFunction(StdFunction::FuncRStrip{subject: StringValue{value: subject}, with: with.map(|s| StringValue{value: s})})),
+
+    // <string value>.endsWith()
+    "endsWith" "(" <subject: Expression> "," <with: Expression> <start:("," "start" "=" <Expression>)?> <end:("," "end" "=" <Expression>)?> ")" => Box::new(Expression::StdFunction(StdFunction::FuncEndsWith{subject: StringValue{value: subject}, with: StringValue{value: with}, start: start.map(|s| NumericValue{value: s}), end: end.map(|s| NumericValue{value: s})})),
+
+    // <string value>.startsWith()
+    "startsWith" "(" <subject: Expression> "," <with: Expression> <start:("," "start" "=" <Expression>)?> <end:("," "end" "=" <Expression>)?> ")" => Box::new(Expression::StdFunction(StdFunction::FuncStartsWith{subject: StringValue{value: subject}, with: StringValue{value: with}, start: start.map(|s| NumericValue{value: s}), end: end.map(|s| NumericValue{value: s})})),
+
+    // <string value>.split()
+    "split" "(" <subject: Expression> "," <with: Expression> <num_splits:("," "num_splits" "=" <Expression>)?> ")" => Box::new(Expression::StdFunction(StdFunction::FuncSplit{subject: StringValue{value: subject}, with: StringValue{value: with}, num_splits: num_splits.map(|s| NumericValue{value: s})})),
+
+    // <string value>.words()
+    "words" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncWords(StringValue{value: subject}))),
+
+    // <string value>.index()
+    "index" "(" <subject: Expression> "," <search: Expression> <start:("," "start" "=" <Expression>)?> <end:("," "end" "=" <Expression>)?> ")" => Box::new(Expression::StdFunction(StdFunction::FuncIndex{subject: StringValue{value: subject}, search: StringValue{value: search}, start: start.map(|s| NumericValue{value: s}), end: end.map(|s| NumericValue{value: s})})),
+
+    // <string value>.rindex()
+    "rindex" "(" <subject: Expression> "," <search: Expression> <start:("," "start" "=" <Expression>)?> <end:("," "end" "=" <Expression>)?> ")" => Box::new(Expression::StdFunction(StdFunction::FuncRIndex{subject: StringValue{value: subject}, search: StringValue{value: search}, start: start.map(|s| NumericValue{value: s}), end: end.map(|s| NumericValue{value: s})})),
+
+    // <string value>.find()
+    "find" "(" <subject: Expression> "," <search: Expression> <start:("," "start" "=" <Expression>)?> <end:("," "end" "=" <Expression>)?> ")" => Box::new(Expression::StdFunction(StdFunction::FuncFind{subject: StringValue{value: subject}, search: StringValue{value: search}, start: start.map(|s| NumericValue{value: s}), end: end.map(|s| NumericValue{value: s})})),
+
+    // rfind(<string value>)
+    "rfind" "(" <subject: Expression> "," <search: Expression> <start:("," "start" "=" <Expression>)?> <end:("," "end" "=" <Expression>)?> ")" => Box::new(Expression::StdFunction(StdFunction::FuncRFind{subject: StringValue{value: subject}, search: StringValue{value: search}, start: start.map(|s| NumericValue{value: s}), end: end.map(|s| NumericValue{value: s})})),
+
+    // hex(<numeric value>)
+    "hex" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncHex(NumericValue{value: subject}))),
+
+    // oct(<numeric value>)
+    "oct" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncOct(NumericValue{value: subject}))),
+
+    // abs(<numeric value>)
+    "abs" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncAbs(NumericValue{value: subject}))),
+
+    // round(<numeric value>)
+    "round" "(" <subject: Expression> <num_digits: ("," <Expression>)?> ")" => Box::new(Expression::StdFunction(StdFunction::FuncRound(NumericValue{value: subject}, num_digits.map(|n| NumericValue{value: n})))),
+
+    // parse_local_datetime(<string value>)
+    "parse_local_datetime" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncParseLocalDateTime(StringValue{value: subject}))),
+
+    // parse_utc_datetime(<string value>)
+    "parse_utc_datetime" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncParseUtcDateTime(StringValue{value: subject}))),
+
+    // local_datetime.from_timestamp_secs(<numeric value>)
+    "local_datetime" "." "from_timestamp_secs" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncLocalDateTimeFromTimestampSecs(NumericValue{value: subject}))),
+
+    // utc_datetime.from_timestamp_secs(<numeric value>)
+    "utc_datetime" "." "from_timestamp_secs" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncUtcDateTimeFromTimestampSecs(NumericValue{value: subject}))),
+
+    // local_datetime.from_timestamp_millis(<numeric value>)
+    "local_datetime" "." "from_timestamp_millis" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncLocalDateTimeFromTimestampMillis(NumericValue{value: subject}))),
+
+    // utc_datetime.from_timestamp_millis(<numeric value>)
+    "utc_datetime" "." "from_timestamp_millis" "(" <subject: Expression> ")" => Box::new(Expression::StdFunction(StdFunction::FuncUtcDateTimeFromTimestampMillis(NumericValue{value: subject}))),
+
+    <name: Identifier> <args: FnArgs> => Box::new(Expression::CustomFunction{name, args}),
+
     "(" <Expression> ")",
 };
 
-Args: Vec<Box<Expression>> = {
-    "(" <Comma<Expression>> ")"
+FnArgs: Option<Vec<Box<Expression>>> = {
+    "(" <args: CommaSeparatedArgs>  ")" => Some(args),
+    "(" ")" => None,
 };
 
-Op10: OpCode = {
+CommaSeparatedArgs: Vec<Box<Expression>> = {
+    <arg_1: Expression> <mut other_args:("," <Expression>)*> => {
+        let mut v = Vec::<Box<Expression>>::new();
+        v.push(arg_1);
+        v.append(&mut other_args);
+
+        v
+    }
+};
+
+PositionalArgs: Vec<(String, Box<Expression>)> = {
+    <mut list: PositionalArgs> "," <name: Identifier> "=" <arg: Expression> => {
+        list.push((name, arg));
+        list
+    },
+    <name: Identifier> "=" <arg: Expression> => vec![(name, arg)]
+};
+
+LogicalOp: OpCode = {
+    " and " => OpCode::And,
     "&&" => OpCode::And,
+
+    " or " => OpCode::And,
     "||" => OpCode::Or,
 };
 
-Op20: OpCode = {
+ComparisonOp: OpCode = {
+    " eq " => OpCode::Equal,
     "==" => OpCode::Equal,
+
+    " ne " => OpCode::NotEqual,
     "!=" => OpCode::NotEqual,
+
+    " ge " => OpCode::GreaterEqual,
     ">=" => OpCode::GreaterEqual,
+
+    " le " => OpCode::LessEqual,
     "<=" => OpCode::LessEqual,
+
+    " gt " => OpCode::Greater,
     ">" => OpCode::Greater,
+
+    " lt " => OpCode::Less,
     "<" => OpCode::Less,
+
     "in" => OpCode::In,
 };
 
@@ -117,7 +550,7 @@ Op50: OpCode = {
 
 Number: f64 = {
     r"[0-9]+" => f64::from_str(<>).unwrap(),
-    r"[0-9]+\.[0-9]*" => f64::from_str(<>).unwrap(),
+    r"[0-9]+\.[0-9]+" => f64::from_str(<>).unwrap(),
     r"\.[0-9]+" => f64::from_str(<>).unwrap(),
 };
 
@@ -126,20 +559,24 @@ String: String = {
     <s: r#"'([^'\\]*(\\')?)*'"#> => s[1..s.len() - 1].to_string().replace("\\'", "'"),
 };
 
-
 Identifier: String = {
     r#"[a-zA-Z_][a-zA-Z0-9_]*"# => <>.to_string()
 }
 
 Index: Box<Expression> = {
-    "[" "." <ident: Identifier> <op: Op20> <right: Expr80> "]" => Box::new(Expression::Filter {ident, op, right}),
+    "[" "." <ident: Identifier> <op: ComparisonOp> <right: Expr90> "]" => Box::new(Expression::Filter {ident, op, right}),
     "[" <Expression> "]",
 }
 
 
 Boolean: bool = {
     "true" => true,
+    "True" => true,
+    "TRUE" => true,
+
     "false" => false,
+    "False" => false,
+    "FALSE" => false,
 }
 
 Comma<T>: Vec<T> = {
