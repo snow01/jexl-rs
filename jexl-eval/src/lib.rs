@@ -1447,11 +1447,27 @@ impl Evaluator {
                 Self::apply_semver_op(op, a, b)
             }
 
-            (OpCode::Add, Value::String(a), Value::String(b)) => Ok(Value::String(format!("{}{}", a, b))),
-            (OpCode::In, Value::String(a), Value::String(b)) => Ok(Value::Bool(b.contains(&a))),
+            (op, Value::String(a), Value::String(b)) => {
+                match op {
+                    OpCode::Add => Ok((format!("{}{}", a, b)).into()),
+                    OpCode::Less => Ok(Value::Bool(a < b)),
+                    OpCode::Greater => Ok(Value::Bool(a > b)),
+                    OpCode::LessEqual => Ok(Value::Bool(a <= b)),
+                    OpCode::GreaterEqual => Ok(Value::Bool(a >= b)),
+                    OpCode::Equal => Ok(Value::Bool(a == b)),
+                    OpCode::NotEqual => Ok(Value::Bool(a != b)),
+                    OpCode::In => Ok(Value::Bool(b.contains(&a))),
+                    _ => {
+                        Err(EvaluationError::InvalidBinaryOp {
+                            operation,
+                            left: Value::String(a),
+                            right: Value::String(b),
+                        })
+                    }
+                }
+            }
+
             (OpCode::In, left, Value::Array(v)) => Ok(Value::Bool(v.contains(&left))),
-            (OpCode::Equal, Value::String(a), Value::String(b)) => Ok(Value::Bool(a == b)),
-            (OpCode::NotEqual, Value::String(a), Value::String(b)) => Ok(Value::Bool(a != b)),
 
             // string operators with null
             (OpCode::Add, Value::Null, Value::String(b)) => Ok(Value::String(b)),
