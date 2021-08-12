@@ -31,24 +31,30 @@
 //! let evaluator = Evaluator::new();
 //! assert_eq!(evaluator.eval_in_context("a.b", context).unwrap(), value!(2.0));
 //! ```
-//!
+
+#[macro_use]
+extern crate lazy_static;
 
 use std::collections::{BTreeMap, HashMap};
 use std::ops::Range;
 
-use chrono::{LocalResult, TimeZone};
+use chrono::{Duration, LocalResult, NaiveDate, NaiveTime, TimeZone};
+use semver::Version;
 
 use error::*;
 use jexl_parser::{
     ast::{Expression, OpCode},
     Parser,
 };
-use jexl_parser::ast::{ArrayValue, DateTimeValue, DateLikeValue, DurationValue, NumericValue, StdFunction, StringValue, TimeLikeValue};
-pub use value::{Number, Value, DateTime, to_value};
-use semver::Version;
+use jexl_parser::ast::{
+    ArrayValue, DateLikeValue, DateTimeValue, DurationValue, NumericValue, StdFunction,
+    StringValue, TimeLikeValue,
+};
+pub use value::{DateTime, Number, to_value, Value};
 
 pub mod error;
 mod value;
+mod utils;
 
 const EPSILON: f64 = 0.000001f64;
 
@@ -146,11 +152,7 @@ impl Evaluator {
         self.eval_in_context(input, &context)
     }
 
-    pub fn eval_in_context<T: serde::Serialize>(
-        &self,
-        input: &str,
-        context: T,
-    ) -> Result<Value> {
+    pub fn eval_in_context<T: serde::Serialize>(&self, input: &str, context: T) -> Result<Value> {
         let tree = Parser::parse(input)?;
         let context = value::to_value(context)?;
         if !context.is_object() {
@@ -184,21 +186,19 @@ impl Evaluator {
                 Ok(context.get(&inner).unwrap_or(&Value::Null).clone())
             }
 
-            Expression::DotOperation { subject, ident, default_value } => {
+            Expression::DotOperation {
+                subject,
+                ident,
+                default_value,
+            } => {
                 let subject = self.eval_ast(*subject, context)?;
                 let value = subject.get(&ident);
                 match value {
-                    None => {
-                        match default_value {
-                            None => {
-                                Ok(Value::Null)
-                            }
-                            Some(default_value_expr) => {
-                                self.eval_ast(*default_value_expr, context)
-                            }
-                        }
-                    }
-                    Some(value) => { Ok(value.clone()) }
+                    None => match default_value {
+                        None => Ok(Value::Null),
+                        Some(default_value_expr) => self.eval_ast(*default_value_expr, context),
+                    },
+                    Some(value) => Ok(value.clone()),
                 }
             }
 
@@ -223,9 +223,7 @@ impl Evaluator {
 
                 let index = self.eval_ast(*index, context)?;
                 match index {
-                    Value::String(inner) => {
-                        Ok(subject.get(&inner).unwrap_or(&Value::Null).clone())
-                    }
+                    Value::String(inner) => Ok(subject.get(&inner).unwrap_or(&Value::Null).clone()),
                     Value::Number(inner) => Ok(subject
                         .get(inner.as_f64().unwrap().floor() as usize)
                         .unwrap_or(&Value::Null)
@@ -356,10 +354,16 @@ impl Evaluator {
                                 max = number;
                             }
                         } else {
-                            return Err(EvaluationError::InvalidValueType { expected: "Number".to_string(), got: format!("{}", number) });
+                            return Err(EvaluationError::InvalidValueType {
+                                expected: "Number".to_string(),
+                                got: format!("{}", number),
+                            });
                         }
                     } else {
-                        return Err(EvaluationError::InvalidValueType { expected: "Number".to_string(), got: format!("{:?}", element) });
+                        return Err(EvaluationError::InvalidValueType {
+                            expected: "Number".to_string(),
+                            got: format!("{:?}", element),
+                        });
                     }
                 }
 
@@ -379,10 +383,16 @@ impl Evaluator {
                                 min = number;
                             }
                         } else {
-                            return Err(EvaluationError::InvalidValueType { expected: "Number".to_string(), got: format!("{}", number) });
+                            return Err(EvaluationError::InvalidValueType {
+                                expected: "Number".to_string(),
+                                got: format!("{}", number),
+                            });
                         }
                     } else {
-                        return Err(EvaluationError::InvalidValueType { expected: "Number".to_string(), got: format!("{:?}", element) });
+                        return Err(EvaluationError::InvalidValueType {
+                            expected: "Number".to_string(),
+                            got: format!("{:?}", element),
+                        });
                     }
                 }
 
@@ -400,45 +410,89 @@ impl Evaluator {
                         if let Some(number) = number.as_f64() {
                             sum += number;
                         } else {
-                            return Err(EvaluationError::InvalidValueType { expected: "Number".to_string(), got: format!("{}", number) });
+                            return Err(EvaluationError::InvalidValueType {
+                                expected: "Number".to_string(),
+                                got: format!("{}", number),
+                            });
                         }
                     } else {
-                        return Err(EvaluationError::InvalidValueType { expected: "Number".to_string(), got: format!("{:?}", element) });
+                        return Err(EvaluationError::InvalidValueType {
+                            expected: "Number".to_string(),
+                            got: format!("{:?}", element),
+                        });
                     }
                 }
 
                 return Ok(sum.into());
             }
-            StdFunction::FuncLen(subject) => {
-                match self.eval_ast(*subject, context)? {
-                    Value::Null => Ok(Value::Number(Number::from(0))),
-                    Value::String(s) => Ok(Value::Number(Number::from(s.len()))),
-                    Value::Bool(_) => Err(EvaluationError::InvalidValueType { expected: "String/Array/Object".to_string(), got: "Bool".to_string() }),
-                    Value::Number(_) => Err(EvaluationError::InvalidValueType { expected: "String/Array/Object".to_string(), got: "Number".to_string() }),
-                    Value::Array(a) => Ok(Value::Number(Number::from(a.len()))),
-                    Value::Object(o) => Ok(Value::Number(Number::from(o.len()))),
-                    Value::DateTime(_) => Err(EvaluationError::InvalidValueType { expected: "String/Array/Object".to_string(), got: "DateTime".to_string() }),
-                    Value::Date(_) => Err(EvaluationError::InvalidValueType { expected: "String/Array/Object".to_string(), got: "Date".to_string() }),
-                    Value::Time(_) => Err(EvaluationError::InvalidValueType { expected: "String/Array/Object".to_string(), got: "Time".to_string() }),
-                    Value::Duration(_) => Err(EvaluationError::InvalidValueType { expected: "String/Array/Object".to_string(), got: "Duration".to_string() }),
-                    Value::SemVer(_) => Err(EvaluationError::InvalidValueType { expected: "String/Array/Object".to_string(), got: "SemVer".to_string() }),
-                }
-            }
-            StdFunction::FuncIsEmpty(subject) => {
-                match self.eval_ast(*subject, context)? {
-                    Value::Null => Ok(Value::Bool(true)),
-                    Value::String(s) => Ok(Value::Bool(s.is_empty())),
-                    Value::Bool(_) => Err(EvaluationError::InvalidValueType { expected: "String/Array/Object".to_string(), got: "Bool".to_string() }),
-                    Value::Number(_) => Err(EvaluationError::InvalidValueType { expected: "String/Array/Object".to_string(), got: "Number".to_string() }),
-                    Value::Array(a) => Ok(Value::Bool(a.is_empty())),
-                    Value::Object(o) => Ok(Value::Bool(o.is_empty())),
-                    Value::DateTime(_) => Err(EvaluationError::InvalidValueType { expected: "String/Array/Object".to_string(), got: "DateTime".to_string() }),
-                    Value::Date(_) => Err(EvaluationError::InvalidValueType { expected: "String/Array/Object".to_string(), got: "Date".to_string() }),
-                    Value::Time(_) => Err(EvaluationError::InvalidValueType { expected: "String/Array/Object".to_string(), got: "Time".to_string() }),
-                    Value::Duration(_) => Err(EvaluationError::InvalidValueType { expected: "String/Array/Object".to_string(), got: "Duration".to_string() }),
-                    Value::SemVer(_) => Err(EvaluationError::InvalidValueType { expected: "String/Array/Object".to_string(), got: "SemVer".to_string() }),
-                }
-            }
+            StdFunction::FuncLen(subject) => match self.eval_ast(*subject, context)? {
+                Value::Null => Ok(Value::Number(Number::from(0))),
+                Value::String(s) => Ok(Value::Number(Number::from(s.len()))),
+                Value::Bool(_) => Err(EvaluationError::InvalidValueType {
+                    expected: "String/Array/Object".to_string(),
+                    got: "Bool".to_string(),
+                }),
+                Value::Number(_) => Err(EvaluationError::InvalidValueType {
+                    expected: "String/Array/Object".to_string(),
+                    got: "Number".to_string(),
+                }),
+                Value::Array(a) => Ok(Value::Number(Number::from(a.len()))),
+                Value::Object(o) => Ok(Value::Number(Number::from(o.len()))),
+                Value::DateTime(_) => Err(EvaluationError::InvalidValueType {
+                    expected: "String/Array/Object".to_string(),
+                    got: "DateTime".to_string(),
+                }),
+                Value::Date(_) => Err(EvaluationError::InvalidValueType {
+                    expected: "String/Array/Object".to_string(),
+                    got: "Date".to_string(),
+                }),
+                Value::Time(_) => Err(EvaluationError::InvalidValueType {
+                    expected: "String/Array/Object".to_string(),
+                    got: "Time".to_string(),
+                }),
+                Value::Duration(_) => Err(EvaluationError::InvalidValueType {
+                    expected: "String/Array/Object".to_string(),
+                    got: "Duration".to_string(),
+                }),
+                Value::SemVer(_) => Err(EvaluationError::InvalidValueType {
+                    expected: "String/Array/Object".to_string(),
+                    got: "SemVer".to_string(),
+                }),
+            },
+            StdFunction::FuncIsEmpty(subject) => match self.eval_ast(*subject, context)? {
+                Value::Null => Ok(Value::Bool(true)),
+                Value::String(s) => Ok(Value::Bool(s.is_empty())),
+                Value::Bool(_) => Err(EvaluationError::InvalidValueType {
+                    expected: "String/Array/Object".to_string(),
+                    got: "Bool".to_string(),
+                }),
+                Value::Number(_) => Err(EvaluationError::InvalidValueType {
+                    expected: "String/Array/Object".to_string(),
+                    got: "Number".to_string(),
+                }),
+                Value::Array(a) => Ok(Value::Bool(a.is_empty())),
+                Value::Object(o) => Ok(Value::Bool(o.is_empty())),
+                Value::DateTime(_) => Err(EvaluationError::InvalidValueType {
+                    expected: "String/Array/Object".to_string(),
+                    got: "DateTime".to_string(),
+                }),
+                Value::Date(_) => Err(EvaluationError::InvalidValueType {
+                    expected: "String/Array/Object".to_string(),
+                    got: "Date".to_string(),
+                }),
+                Value::Time(_) => Err(EvaluationError::InvalidValueType {
+                    expected: "String/Array/Object".to_string(),
+                    got: "Time".to_string(),
+                }),
+                Value::Duration(_) => Err(EvaluationError::InvalidValueType {
+                    expected: "String/Array/Object".to_string(),
+                    got: "Duration".to_string(),
+                }),
+                Value::SemVer(_) => Err(EvaluationError::InvalidValueType {
+                    expected: "String/Array/Object".to_string(),
+                    got: "SemVer".to_string(),
+                }),
+            },
             StdFunction::FuncCapitalise(subject) => {
                 let value = self.eval_string_value(subject, context)?;
                 Ok(Value::String(value._capitalize(true)))
@@ -501,9 +555,7 @@ impl Evaluator {
                 let value = self.eval_string_value(subject, context)?;
 
                 let trimmed = match with {
-                    None => {
-                        value._trim("")
-                    }
+                    None => value._trim(""),
                     Some(with) => {
                         let with = self.eval_string_value(with, context)?;
 
@@ -517,9 +569,7 @@ impl Evaluator {
                 let value = self.eval_string_value(subject, context)?;
 
                 let trimmed = match with {
-                    None => {
-                        value._trim_left("")
-                    }
+                    None => value._trim_left(""),
                     Some(with) => {
                         let with = self.eval_string_value(with, context)?;
                         value._trim_left(&with)
@@ -532,9 +582,7 @@ impl Evaluator {
                 let value = self.eval_string_value(subject, context)?;
 
                 let trimmed = match with {
-                    None => {
-                        value._trim_right("")
-                    }
+                    None => value._trim_right(""),
                     Some(with) => {
                         let with = self.eval_string_value(with, context)?;
                         value._trim_right(&with)
@@ -543,7 +591,12 @@ impl Evaluator {
 
                 Ok(Value::String(trimmed))
             }
-            StdFunction::FuncEndsWith { subject, with, start, end } => {
+            StdFunction::FuncEndsWith {
+                subject,
+                with,
+                start,
+                end,
+            } => {
                 let value = self.eval_string_value(subject, context)?;
                 let with = self.eval_string_value(with, context)?;
 
@@ -551,7 +604,12 @@ impl Evaluator {
 
                 Ok(Value::Bool(value[range]._ends_with(&with)))
             }
-            StdFunction::FuncStartsWith { subject, with, start, end } => {
+            StdFunction::FuncStartsWith {
+                subject,
+                with,
+                start,
+                end,
+            } => {
                 let value = self.eval_string_value(subject, context)?;
                 let with = self.eval_string_value(with, context)?;
 
@@ -627,7 +685,11 @@ impl Evaluator {
                 let value = self.eval_string_value(subject, context)?;
                 Ok(Value::Bool(value._is_shouty_snake_case()))
             }
-            StdFunction::FuncSplit { subject, with, num_splits } => {
+            StdFunction::FuncSplit {
+                subject,
+                with,
+                num_splits,
+            } => {
                 let value = self.eval_string_value(subject, context)?;
                 let with = self.eval_string_value(with, context)?;
 
@@ -640,7 +702,11 @@ impl Evaluator {
 
                 Ok(splits.into())
             }
-            StdFunction::FuncRSplit { subject, with, num_splits } => {
+            StdFunction::FuncRSplit {
+                subject,
+                with,
+                num_splits,
+            } => {
                 let value = self.eval_string_value(subject, context)?;
                 let with = self.eval_string_value(with, context)?;
 
@@ -657,37 +723,65 @@ impl Evaluator {
                 let value = self.eval_string_value(subject, context)?;
                 Ok(value._words().into())
             }
-            StdFunction::FuncIndex { subject, search, start, end } => {
+            StdFunction::FuncIndex {
+                subject,
+                search,
+                start,
+                end,
+            } => {
                 let value = self.eval_string_value(subject, context)?;
                 let search = self.eval_string_value(search, context)?;
 
                 let range = self.slice_range(&value, start, end, context)?;
 
-                Ok(Value::Number(Number::from(value[range]._index_of(&search, 0))))
+                Ok(Value::Number(Number::from(
+                    value[range]._index_of(&search, 0),
+                )))
             }
-            StdFunction::FuncRIndex { subject, search, start, end } => {
+            StdFunction::FuncRIndex {
+                subject,
+                search,
+                start,
+                end,
+            } => {
                 let value = self.eval_string_value(subject, context)?;
                 let search = self.eval_string_value(search, context)?;
 
                 let range = self.slice_range(&value, start, end, context)?;
 
-                Ok(Value::Number(Number::from(value[range]._last_index_of(&search, 0))))
+                Ok(Value::Number(Number::from(
+                    value[range]._last_index_of(&search, 0),
+                )))
             }
-            StdFunction::FuncFind { subject, search, start, end } => {
+            StdFunction::FuncFind {
+                subject,
+                search,
+                start,
+                end,
+            } => {
                 let value = self.eval_string_value(subject, context)?;
                 let search = self.eval_string_value(search, context)?;
 
                 let range = self.slice_range(&value, start, end, context)?;
 
-                Ok(Value::Number(Number::from(value[range]._index_of(&search, 0))))
+                Ok(Value::Number(Number::from(
+                    value[range]._index_of(&search, 0),
+                )))
             }
-            StdFunction::FuncRFind { subject, search, start, end } => {
+            StdFunction::FuncRFind {
+                subject,
+                search,
+                start,
+                end,
+            } => {
                 let value = self.eval_string_value(subject, context)?;
                 let search = self.eval_string_value(search, context)?;
 
                 let range = self.slice_range(&value, start, end, context)?;
 
-                Ok(Value::Number(Number::from(value[range]._last_index_of(&search, 0))))
+                Ok(Value::Number(Number::from(
+                    value[range]._last_index_of(&search, 0),
+                )))
             }
             StdFunction::FuncAbs(subject) => {
                 let value = self.eval_numeric_value(subject, context)?;
@@ -727,7 +821,10 @@ impl Evaluator {
             StdFunction::FuncHex(subject) => {
                 let value = self.eval_numeric_value(subject, context)?;
                 if value.is_f64() {
-                    Err(EvaluationError::InvalidValueType { expected: "Integer".to_string(), got: "Float".to_string() })
+                    Err(EvaluationError::InvalidValueType {
+                        expected: "Integer".to_string(),
+                        got: "Float".to_string(),
+                    })
                 } else if value.is_i64() {
                     let value = value.as_i64().unwrap();
                     Ok(Value::String(format!("{:x}", value)))
@@ -741,7 +838,10 @@ impl Evaluator {
             StdFunction::FuncOct(subject) => {
                 let value = self.eval_numeric_value(subject, context)?;
                 if value.is_f64() {
-                    Err(EvaluationError::InvalidValueType { expected: "Integer".to_string(), got: "Float".to_string() })
+                    Err(EvaluationError::InvalidValueType {
+                        expected: "Integer".to_string(),
+                        got: "Float".to_string(),
+                    })
                 } else if value.is_i64() {
                     let value = value.as_i64().unwrap();
                     Ok(Value::String(format!("{:o}", value)))
@@ -756,42 +856,60 @@ impl Evaluator {
                 use anyhow::Context;
 
                 let value = self.eval_string_value(subject, context)?;
-                let datetime = value.parse::<chrono::DateTime<chrono::Local>>().with_context(|| format!("Error in parsing value={} to Local DateTime", value))?;
+                let datetime = value
+                    .parse::<chrono::DateTime<chrono::Local>>()
+                    .with_context(|| {
+                        format!("Error in parsing value={} to Local DateTime", value)
+                    })?;
                 Ok(Value::from(datetime))
             }
             StdFunction::FuncParseUtcDateTime(subject) => {
                 use anyhow::Context;
 
                 let value = self.eval_string_value(subject, context)?;
-                let datetime = value.parse::<chrono::DateTime<chrono::Utc>>().with_context(|| format!("Error in parsing value={} to Utc DateTime", value))?;
+                let datetime = value
+                    .parse::<chrono::DateTime<chrono::Utc>>()
+                    .with_context(|| format!("Error in parsing value={} to Utc DateTime", value))?;
                 Ok(Value::from(datetime))
             }
             StdFunction::FuncLocalDateTimeFromTimestampSecs(subject) => {
                 let value = self.eval_to_i64(Some(subject), context, || 0)?;
                 match chrono::Local.timestamp_opt(value, 0) {
                     LocalResult::Single(datetime) => Ok(Value::from(datetime)),
-                    _ => Err(EvaluationError::CustomError(anyhow::anyhow!("Error in converting timestamp value={}s to Utc DateTime", value)))
+                    _ => Err(EvaluationError::CustomError(anyhow::anyhow!(
+                        "Error in converting timestamp value={}s to Utc DateTime",
+                        value
+                    ))),
                 }
             }
             StdFunction::FuncUtcDateTimeFromTimestampSecs(subject) => {
                 let value = self.eval_to_i64(Some(subject), context, || 0)?;
                 match chrono::Utc.timestamp_opt(value, 0) {
                     LocalResult::Single(datetime) => Ok(Value::from(datetime)),
-                    _ => Err(EvaluationError::CustomError(anyhow::anyhow!("Error in converting timestamp value={}s to Local DateTime", value)))
+                    _ => Err(EvaluationError::CustomError(anyhow::anyhow!(
+                        "Error in converting timestamp value={}s to Local DateTime",
+                        value
+                    ))),
                 }
             }
             StdFunction::FuncLocalDateTimeFromTimestampMillis(subject) => {
                 let value = self.eval_to_i64(Some(subject), context, || 0)?;
                 match chrono::Local.timestamp_millis_opt(value) {
                     LocalResult::Single(datetime) => Ok(Value::from(datetime)),
-                    _ => Err(EvaluationError::CustomError(anyhow::anyhow!("Error in converting timestamp value={}s to Utc DateTime", value)))
+                    _ => Err(EvaluationError::CustomError(anyhow::anyhow!(
+                        "Error in converting timestamp value={}s to Utc DateTime",
+                        value
+                    ))),
                 }
             }
             StdFunction::FuncUtcDateTimeFromTimestampMillis(subject) => {
                 let value = self.eval_to_i64(Some(subject), context, || 0)?;
                 match chrono::Utc.timestamp_millis_opt(value) {
                     LocalResult::Single(datetime) => Ok(Value::from(datetime)),
-                    _ => Err(EvaluationError::CustomError(anyhow::anyhow!("Error in converting timestamp value={}s to Local DateTime", value)))
+                    _ => Err(EvaluationError::CustomError(anyhow::anyhow!(
+                        "Error in converting timestamp value={}s to Local DateTime",
+                        value
+                    ))),
                 }
             }
             StdFunction::FuncDuration {
@@ -801,7 +919,7 @@ impl Evaluator {
                 seconds,
                 milliseconds,
                 microseconds,
-                weeks
+                weeks,
             } => {
                 let days = self.eval_to_i64(days, context, || 0)?;
                 let hours = self.eval_to_i64(hours, context, || 0)?;
@@ -811,16 +929,16 @@ impl Evaluator {
                 let microseconds = self.eval_to_i64(microseconds, context, || 0)?;
                 let weeks = self.eval_to_i64(weeks, context, || 0)?;
 
-                let total_value = (((((weeks * 7 + days) * 24 + hours) * 60 + minutes) * 60 + seconds) * 1000 + milliseconds) * 1000 + microseconds;
+                let total_value =
+                    (((((weeks * 7 + days) * 24 + hours) * 60 + minutes) * 60 + seconds) * 1000
+                        + milliseconds)
+                        * 1000
+                        + microseconds;
 
                 Ok(Value::Duration(chrono::Duration::microseconds(total_value)))
             }
-            StdFunction::FuncLocalNow() => {
-                Ok(Value::from(chrono::Local::now()))
-            }
-            StdFunction::FuncUtcNow() => {
-                Ok(Value::from(chrono::Utc::now()))
-            }
+            StdFunction::FuncLocalNow() => Ok(Value::from(chrono::Local::now())),
+            StdFunction::FuncUtcNow() => Ok(Value::from(chrono::Utc::now())),
             StdFunction::FuncUtcDateTime {
                 y,
                 m,
@@ -829,7 +947,7 @@ impl Evaluator {
                 mm,
                 ss,
                 ms,
-                us
+                us,
             } => {
                 let y = self.eval_to_i64(y, context, || 0)? as i32;
                 let m = self.eval_to_usize(m, context, || 0)? as u32;
@@ -840,7 +958,9 @@ impl Evaluator {
                 let ms = self.eval_to_usize(ms, context, || 0)? as u32;
                 let us = self.eval_to_usize(us, context, || 0)? as u32;
 
-                let datetime = chrono::Utc.ymd(y, m, d).and_hms_micro(h, mm, ss, ms * 1000 + us);
+                let datetime = chrono::Utc
+                    .ymd(y, m, d)
+                    .and_hms_micro(h, mm, ss, ms * 1000 + us);
 
                 Ok(Value::from(datetime))
             }
@@ -852,7 +972,7 @@ impl Evaluator {
                 mm,
                 ss,
                 ms,
-                us
+                us,
             } => {
                 let y = self.eval_to_i64(y, context, || 0)? as i32;
                 let m = self.eval_to_usize(m, context, || 0)? as u32;
@@ -863,28 +983,20 @@ impl Evaluator {
                 let ms = self.eval_to_usize(ms, context, || 0)? as u32;
                 let us = self.eval_to_usize(us, context, || 0)? as u32;
 
-                let datetime = chrono::Local.ymd(y, m, d).and_hms_micro(h, mm, ss, ms * 1000 + us);
+                let datetime = chrono::Local
+                    .ymd(y, m, d)
+                    .and_hms_micro(h, mm, ss, ms * 1000 + us);
 
                 Ok(Value::from(datetime))
             }
-            StdFunction::FuncDate {
-                y,
-                m,
-                d
-            } => {
+            StdFunction::FuncDate { y, m, d } => {
                 let y = self.eval_to_i64(y, context, || 0)? as i32;
                 let m = self.eval_to_usize(m, context, || 0)? as u32;
                 let d = self.eval_to_usize(d, context, || 0)? as u32;
 
                 Ok(Value::from(chrono::NaiveDate::from_ymd(y, m, d)))
             }
-            StdFunction::FuncTime {
-                h,
-                mm,
-                ss,
-                ms,
-                us
-            } => {
+            StdFunction::FuncTime { h, mm, ss, ms, us } => {
                 let h = self.eval_to_usize(h, context, || 0)? as u32;
                 let mm = self.eval_to_usize(mm, context, || 0)? as u32;
                 let ss = self.eval_to_usize(ss, context, || 0)? as u32;
@@ -973,13 +1085,16 @@ impl Evaluator {
             }
             StdFunction::FuncGetMicrosecondsFromDuration(duration) => {
                 let duration = self.eval_duration_value(duration, context)?;
-                Ok(Value::from(duration.num_microseconds().unwrap_or_else(|| 0)))
+                Ok(Value::from(
+                    duration.num_microseconds().unwrap_or_else(|| 0),
+                ))
             }
             StdFunction::FuncSemVersion(subject) => {
                 let value = self.eval_string_value(subject, context)?;
 
                 use anyhow::Context;
-                let version = semver::Version::parse(&value).with_context(|| format!("Error in parsing {} to semVersion", value))?;
+                let version = utils::parse_semver(&value)
+                    .with_context(|| format!("Error in parsing {} to semVersion", value))?;
 
                 Ok(Value::SemVer(version))
             }
@@ -987,21 +1102,38 @@ impl Evaluator {
                 let value = self.eval_string_value(subject, context)?;
 
                 use anyhow::Context;
-                let std_duration = humantime::parse_duration(&value).with_context(|| format!("Error in parsing {} to Duration", value))?;
-                let duration = chrono::Duration::from_std(std_duration).with_context(|| format!("Error in converting {} to chrono::Duration", value))?;
+                let std_duration = humantime::parse_duration(&value)
+                    .with_context(|| format!("Error in parsing {} to Duration", value))?;
+                let duration = chrono::Duration::from_std(std_duration).with_context(|| {
+                    format!("Error in converting {} to chrono::Duration", value)
+                })?;
 
                 Ok(Value::Duration(duration))
             }
         }
     }
 
-    fn slice_range(&self, value: &str, start: Option<NumericValue>, end: Option<NumericValue>, context: &EvaluationContext) -> Result<Range<usize>> {
+    fn slice_range(
+        &self,
+        value: &str,
+        start: Option<NumericValue>,
+        end: Option<NumericValue>,
+        context: &EvaluationContext,
+    ) -> Result<Range<usize>> {
         let start_idx = self.eval_to_usize(start, context, || 0)?;
         let end_idx = self.eval_to_usize(end, context, || value.len())?;
         Ok(start_idx..end_idx)
     }
 
-    fn eval_to_usize<F>(&self, value_expr: Option<NumericValue>, context: &EvaluationContext, default_value: F) -> anyhow::Result<usize> where F: FnOnce() -> usize {
+    fn eval_to_usize<F>(
+        &self,
+        value_expr: Option<NumericValue>,
+        context: &EvaluationContext,
+        default_value: F,
+    ) -> anyhow::Result<usize>
+        where
+            F: FnOnce() -> usize,
+    {
         match value_expr {
             None => Ok(default_value()),
             Some(value_expr) => {
@@ -1020,7 +1152,15 @@ impl Evaluator {
         }
     }
 
-    fn eval_to_i64<F>(&self, value_expr: Option<NumericValue>, context: &EvaluationContext, default_value: F) -> anyhow::Result<i64> where F: FnOnce() -> i64 {
+    fn eval_to_i64<F>(
+        &self,
+        value_expr: Option<NumericValue>,
+        context: &EvaluationContext,
+        default_value: F,
+    ) -> anyhow::Result<i64>
+        where
+            F: FnOnce() -> i64,
+    {
         match value_expr {
             None => Ok(default_value()),
             Some(value_expr) => {
@@ -1039,121 +1179,344 @@ impl Evaluator {
         }
     }
 
-    fn eval_array_value(&self, value_expr: ArrayValue, context: &EvaluationContext) -> Result<Vec<Value>> {
+    fn eval_array_value(
+        &self,
+        value_expr: ArrayValue,
+        context: &EvaluationContext,
+    ) -> Result<Vec<Value>> {
         match self.eval_ast(*value_expr.array, context)? {
             Value::Null => Ok(vec![]),
-            Value::String(_value) => Err(EvaluationError::InvalidValueType { expected: "Array".to_string(), got: "String".to_string() }),
-            Value::Bool(_) => Err(EvaluationError::InvalidValueType { expected: "Array".to_string(), got: "Bool".to_string() }),
-            Value::Number(_) => Err(EvaluationError::InvalidValueType { expected: "Array".to_string(), got: "Number".to_string() }),
+            Value::String(_value) => Err(EvaluationError::InvalidValueType {
+                expected: "Array".to_string(),
+                got: "String".to_string(),
+            }),
+            Value::Bool(_) => Err(EvaluationError::InvalidValueType {
+                expected: "Array".to_string(),
+                got: "Bool".to_string(),
+            }),
+            Value::Number(_) => Err(EvaluationError::InvalidValueType {
+                expected: "Array".to_string(),
+                got: "Number".to_string(),
+            }),
             Value::Array(array) => Ok(array),
-            Value::Object(_) => Err(EvaluationError::InvalidValueType { expected: "Array".to_string(), got: "Object".to_string() }),
-            Value::DateTime(_) => Err(EvaluationError::InvalidValueType { expected: "Array".to_string(), got: "DateTime".to_string() }),
-            Value::Date(_) => Err(EvaluationError::InvalidValueType { expected: "Array".to_string(), got: "Date".to_string() }),
-            Value::Time(_) => Err(EvaluationError::InvalidValueType { expected: "Array".to_string(), got: "Time".to_string() }),
-            Value::Duration(_) => Err(EvaluationError::InvalidValueType { expected: "Array".to_string(), got: "Duration".to_string() }),
-            Value::SemVer(_) => Err(EvaluationError::InvalidValueType { expected: "Array".to_string(), got: "SemVer".to_string() }),
+            Value::Object(_) => Err(EvaluationError::InvalidValueType {
+                expected: "Array".to_string(),
+                got: "Object".to_string(),
+            }),
+            Value::DateTime(_) => Err(EvaluationError::InvalidValueType {
+                expected: "Array".to_string(),
+                got: "DateTime".to_string(),
+            }),
+            Value::Date(_) => Err(EvaluationError::InvalidValueType {
+                expected: "Array".to_string(),
+                got: "Date".to_string(),
+            }),
+            Value::Time(_) => Err(EvaluationError::InvalidValueType {
+                expected: "Array".to_string(),
+                got: "Time".to_string(),
+            }),
+            Value::Duration(_) => Err(EvaluationError::InvalidValueType {
+                expected: "Array".to_string(),
+                got: "Duration".to_string(),
+            }),
+            Value::SemVer(_) => Err(EvaluationError::InvalidValueType {
+                expected: "Array".to_string(),
+                got: "SemVer".to_string(),
+            }),
         }
     }
 
-    fn eval_string_value(&self, value_expr: StringValue, context: &EvaluationContext) -> Result<String> {
+    fn eval_string_value(
+        &self,
+        value_expr: StringValue,
+        context: &EvaluationContext,
+    ) -> Result<String> {
         match self.eval_ast(*value_expr.value, context)? {
             Value::Null => Ok("".to_string()),
             Value::String(value) => Ok(value),
-            Value::Bool(_) => Err(EvaluationError::InvalidValueType { expected: "String".to_string(), got: "Bool".to_string() }),
-            Value::Number(_) => Err(EvaluationError::InvalidValueType { expected: "String".to_string(), got: "Number".to_string() }),
-            Value::Array(_) => Err(EvaluationError::InvalidValueType { expected: "String".to_string(), got: "Array".to_string() }),
-            Value::Object(_) => Err(EvaluationError::InvalidValueType { expected: "String".to_string(), got: "Object".to_string() }),
-            Value::DateTime(_) => Err(EvaluationError::InvalidValueType { expected: "String".to_string(), got: "DateTime".to_string() }),
-            Value::Date(_) => Err(EvaluationError::InvalidValueType { expected: "String".to_string(), got: "Date".to_string() }),
-            Value::Time(_) => Err(EvaluationError::InvalidValueType { expected: "String".to_string(), got: "Time".to_string() }),
-            Value::Duration(_) => Err(EvaluationError::InvalidValueType { expected: "String".to_string(), got: "Duration".to_string() }),
-            Value::SemVer(_) => Err(EvaluationError::InvalidValueType { expected: "String".to_string(), got: "SemVer".to_string() }),
+            Value::Bool(_) => Err(EvaluationError::InvalidValueType {
+                expected: "String".to_string(),
+                got: "Bool".to_string(),
+            }),
+            Value::Number(_) => Err(EvaluationError::InvalidValueType {
+                expected: "String".to_string(),
+                got: "Number".to_string(),
+            }),
+            Value::Array(_) => Err(EvaluationError::InvalidValueType {
+                expected: "String".to_string(),
+                got: "Array".to_string(),
+            }),
+            Value::Object(_) => Err(EvaluationError::InvalidValueType {
+                expected: "String".to_string(),
+                got: "Object".to_string(),
+            }),
+            Value::DateTime(_) => Err(EvaluationError::InvalidValueType {
+                expected: "String".to_string(),
+                got: "DateTime".to_string(),
+            }),
+            Value::Date(_) => Err(EvaluationError::InvalidValueType {
+                expected: "String".to_string(),
+                got: "Date".to_string(),
+            }),
+            Value::Time(_) => Err(EvaluationError::InvalidValueType {
+                expected: "String".to_string(),
+                got: "Time".to_string(),
+            }),
+            Value::Duration(_) => Err(EvaluationError::InvalidValueType {
+                expected: "String".to_string(),
+                got: "Duration".to_string(),
+            }),
+            Value::SemVer(_) => Err(EvaluationError::InvalidValueType {
+                expected: "String".to_string(),
+                got: "SemVer".to_string(),
+            }),
         }
     }
 
-    fn eval_numeric_value(&self, value_expr: NumericValue, context: &EvaluationContext) -> Result<Number> {
+    fn eval_numeric_value(
+        &self,
+        value_expr: NumericValue,
+        context: &EvaluationContext,
+    ) -> Result<Number> {
         match self.eval_ast(*value_expr.value, context)? {
             Value::Null => Ok(Number::from(0)),
             Value::Number(value) => Ok(value),
-            Value::String(_) => Err(EvaluationError::InvalidValueType { expected: "Number".to_string(), got: "Bool".to_string() }),
-            Value::Bool(_) => Err(EvaluationError::InvalidValueType { expected: "Number".to_string(), got: "Bool".to_string() }),
-            Value::Array(_) => Err(EvaluationError::InvalidValueType { expected: "Number".to_string(), got: "Array".to_string() }),
-            Value::Object(_) => Err(EvaluationError::InvalidValueType { expected: "Number".to_string(), got: "Object".to_string() }),
-            Value::DateTime(_) => Err(EvaluationError::InvalidValueType { expected: "Number".to_string(), got: "DateTime".to_string() }),
-            Value::Date(_) => Err(EvaluationError::InvalidValueType { expected: "Number".to_string(), got: "Date".to_string() }),
-            Value::Time(_) => Err(EvaluationError::InvalidValueType { expected: "Number".to_string(), got: "Time".to_string() }),
-            Value::Duration(_) => Err(EvaluationError::InvalidValueType { expected: "Number".to_string(), got: "Duration".to_string() }),
-            Value::SemVer(_) => Err(EvaluationError::InvalidValueType { expected: "Number".to_string(), got: "SemVer".to_string() }),
+            Value::String(_) => Err(EvaluationError::InvalidValueType {
+                expected: "Number".to_string(),
+                got: "Bool".to_string(),
+            }),
+            Value::Bool(_) => Err(EvaluationError::InvalidValueType {
+                expected: "Number".to_string(),
+                got: "Bool".to_string(),
+            }),
+            Value::Array(_) => Err(EvaluationError::InvalidValueType {
+                expected: "Number".to_string(),
+                got: "Array".to_string(),
+            }),
+            Value::Object(_) => Err(EvaluationError::InvalidValueType {
+                expected: "Number".to_string(),
+                got: "Object".to_string(),
+            }),
+            Value::DateTime(_) => Err(EvaluationError::InvalidValueType {
+                expected: "Number".to_string(),
+                got: "DateTime".to_string(),
+            }),
+            Value::Date(_) => Err(EvaluationError::InvalidValueType {
+                expected: "Number".to_string(),
+                got: "Date".to_string(),
+            }),
+            Value::Time(_) => Err(EvaluationError::InvalidValueType {
+                expected: "Number".to_string(),
+                got: "Time".to_string(),
+            }),
+            Value::Duration(_) => Err(EvaluationError::InvalidValueType {
+                expected: "Number".to_string(),
+                got: "Duration".to_string(),
+            }),
+            Value::SemVer(_) => Err(EvaluationError::InvalidValueType {
+                expected: "Number".to_string(),
+                got: "SemVer".to_string(),
+            }),
         }
     }
 
-    fn eval_datetime_value(&self, value_expr: DateTimeValue, context: &EvaluationContext) -> Result<value::DateTime> {
+    fn eval_datetime_value(
+        &self,
+        value_expr: DateTimeValue,
+        context: &EvaluationContext,
+    ) -> Result<value::DateTime> {
         match self.eval_ast(*value_expr.value, context)? {
-            Value::Null => Err(EvaluationError::InvalidValueType { expected: "DateTime".to_string(), got: "Null".to_string() }),
-            Value::Number(_) => Err(EvaluationError::InvalidValueType { expected: "DateTime".to_string(), got: "Number".to_string() }),
-            Value::String(_) => Err(EvaluationError::InvalidValueType { expected: "DateTime".to_string(), got: "Bool".to_string() }),
-            Value::Bool(_) => Err(EvaluationError::InvalidValueType { expected: "DateTime".to_string(), got: "Bool".to_string() }),
-            Value::Array(_) => Err(EvaluationError::InvalidValueType { expected: "DateTime".to_string(), got: "Array".to_string() }),
-            Value::Object(_) => Err(EvaluationError::InvalidValueType { expected: "DateTime".to_string(), got: "Object".to_string() }),
+            Value::Null => Err(EvaluationError::InvalidValueType {
+                expected: "DateTime".to_string(),
+                got: "Null".to_string(),
+            }),
+            Value::Number(_) => Err(EvaluationError::InvalidValueType {
+                expected: "DateTime".to_string(),
+                got: "Number".to_string(),
+            }),
+            Value::String(_) => Err(EvaluationError::InvalidValueType {
+                expected: "DateTime".to_string(),
+                got: "Bool".to_string(),
+            }),
+            Value::Bool(_) => Err(EvaluationError::InvalidValueType {
+                expected: "DateTime".to_string(),
+                got: "Bool".to_string(),
+            }),
+            Value::Array(_) => Err(EvaluationError::InvalidValueType {
+                expected: "DateTime".to_string(),
+                got: "Array".to_string(),
+            }),
+            Value::Object(_) => Err(EvaluationError::InvalidValueType {
+                expected: "DateTime".to_string(),
+                got: "Object".to_string(),
+            }),
             Value::DateTime(datetime) => Ok(datetime),
-            Value::Date(_) => Err(EvaluationError::InvalidValueType { expected: "DateTime".to_string(), got: "Date".to_string() }),
-            Value::Time(_) => Err(EvaluationError::InvalidValueType { expected: "DateTime".to_string(), got: "Time".to_string() }),
-            Value::Duration(_) => Err(EvaluationError::InvalidValueType { expected: "DateTime".to_string(), got: "Duration".to_string() }),
-            Value::SemVer(_) => Err(EvaluationError::InvalidValueType { expected: "DateTime".to_string(), got: "SemVer".to_string() }),
+            Value::Date(_) => Err(EvaluationError::InvalidValueType {
+                expected: "DateTime".to_string(),
+                got: "Date".to_string(),
+            }),
+            Value::Time(_) => Err(EvaluationError::InvalidValueType {
+                expected: "DateTime".to_string(),
+                got: "Time".to_string(),
+            }),
+            Value::Duration(_) => Err(EvaluationError::InvalidValueType {
+                expected: "DateTime".to_string(),
+                got: "Duration".to_string(),
+            }),
+            Value::SemVer(_) => Err(EvaluationError::InvalidValueType {
+                expected: "DateTime".to_string(),
+                got: "SemVer".to_string(),
+            }),
         }
     }
 
-    fn eval_datelike_value(&self, value_expr: DateLikeValue, context: &EvaluationContext) -> Result<value::DateLike> {
+    fn eval_datelike_value(
+        &self,
+        value_expr: DateLikeValue,
+        context: &EvaluationContext,
+    ) -> Result<value::DateLike> {
         match self.eval_ast(*value_expr.value, context)? {
-            Value::Null => Err(EvaluationError::InvalidValueType { expected: "Date".to_string(), got: "Null".to_string() }),
-            Value::Number(_) => Err(EvaluationError::InvalidValueType { expected: "Date".to_string(), got: "Number".to_string() }),
-            Value::String(_) => Err(EvaluationError::InvalidValueType { expected: "Date".to_string(), got: "Bool".to_string() }),
-            Value::Bool(_) => Err(EvaluationError::InvalidValueType { expected: "Date".to_string(), got: "Bool".to_string() }),
-            Value::Array(_) => Err(EvaluationError::InvalidValueType { expected: "Date".to_string(), got: "Array".to_string() }),
-            Value::Object(_) => Err(EvaluationError::InvalidValueType { expected: "Date".to_string(), got: "Object".to_string() }),
+            Value::Null => Err(EvaluationError::InvalidValueType {
+                expected: "Date".to_string(),
+                got: "Null".to_string(),
+            }),
+            Value::Number(_) => Err(EvaluationError::InvalidValueType {
+                expected: "Date".to_string(),
+                got: "Number".to_string(),
+            }),
+            Value::String(_) => Err(EvaluationError::InvalidValueType {
+                expected: "Date".to_string(),
+                got: "Bool".to_string(),
+            }),
+            Value::Bool(_) => Err(EvaluationError::InvalidValueType {
+                expected: "Date".to_string(),
+                got: "Bool".to_string(),
+            }),
+            Value::Array(_) => Err(EvaluationError::InvalidValueType {
+                expected: "Date".to_string(),
+                got: "Array".to_string(),
+            }),
+            Value::Object(_) => Err(EvaluationError::InvalidValueType {
+                expected: "Date".to_string(),
+                got: "Object".to_string(),
+            }),
             Value::DateTime(datetime) => match datetime {
                 DateTime::Local(dt) => Ok(value::DateLike::LocalDateTime(dt)),
                 DateTime::Utc(dt) => Ok(value::DateLike::UtcDateTime(dt)),
-            }
+            },
             Value::Date(dt) => Ok(value::DateLike::Date(dt)),
-            Value::Time(_) => Err(EvaluationError::InvalidValueType { expected: "Date".to_string(), got: "Time".to_string() }),
-            Value::Duration(_) => Err(EvaluationError::InvalidValueType { expected: "Date".to_string(), got: "Duration".to_string() }),
-            Value::SemVer(_) => Err(EvaluationError::InvalidValueType { expected: "Date".to_string(), got: "SemVer".to_string() }),
+            Value::Time(_) => Err(EvaluationError::InvalidValueType {
+                expected: "Date".to_string(),
+                got: "Time".to_string(),
+            }),
+            Value::Duration(_) => Err(EvaluationError::InvalidValueType {
+                expected: "Date".to_string(),
+                got: "Duration".to_string(),
+            }),
+            Value::SemVer(_) => Err(EvaluationError::InvalidValueType {
+                expected: "Date".to_string(),
+                got: "SemVer".to_string(),
+            }),
         }
     }
 
-    fn eval_timelike_value(&self, value_expr: TimeLikeValue, context: &EvaluationContext) -> Result<value::TimeLike>  {
+    fn eval_timelike_value(
+        &self,
+        value_expr: TimeLikeValue,
+        context: &EvaluationContext,
+    ) -> Result<value::TimeLike> {
         match self.eval_ast(*value_expr.value, context)? {
-            Value::Null => Err(EvaluationError::InvalidValueType { expected: "Time".to_string(), got: "Null".to_string() }),
-            Value::Number(_) => Err(EvaluationError::InvalidValueType { expected: "Time".to_string(), got: "Number".to_string() }),
-            Value::String(_) => Err(EvaluationError::InvalidValueType { expected: "Time".to_string(), got: "Bool".to_string() }),
-            Value::Bool(_) => Err(EvaluationError::InvalidValueType { expected: "Time".to_string(), got: "Bool".to_string() }),
-            Value::Array(_) => Err(EvaluationError::InvalidValueType { expected: "Time".to_string(), got: "Array".to_string() }),
-            Value::Object(_) => Err(EvaluationError::InvalidValueType { expected: "Time".to_string(), got: "Object".to_string() }),
+            Value::Null => Err(EvaluationError::InvalidValueType {
+                expected: "Time".to_string(),
+                got: "Null".to_string(),
+            }),
+            Value::Number(_) => Err(EvaluationError::InvalidValueType {
+                expected: "Time".to_string(),
+                got: "Number".to_string(),
+            }),
+            Value::String(_) => Err(EvaluationError::InvalidValueType {
+                expected: "Time".to_string(),
+                got: "Bool".to_string(),
+            }),
+            Value::Bool(_) => Err(EvaluationError::InvalidValueType {
+                expected: "Time".to_string(),
+                got: "Bool".to_string(),
+            }),
+            Value::Array(_) => Err(EvaluationError::InvalidValueType {
+                expected: "Time".to_string(),
+                got: "Array".to_string(),
+            }),
+            Value::Object(_) => Err(EvaluationError::InvalidValueType {
+                expected: "Time".to_string(),
+                got: "Object".to_string(),
+            }),
             Value::DateTime(datetime) => match datetime {
                 DateTime::Local(dt) => Ok(value::TimeLike::LocalDateTime(dt)),
                 DateTime::Utc(dt) => Ok(value::TimeLike::UtcDateTime(dt)),
-            }
-            Value::Date(_) => Err(EvaluationError::InvalidValueType { expected: "Time".to_string(), got: "Date".to_string() }),
+            },
+            Value::Date(_) => Err(EvaluationError::InvalidValueType {
+                expected: "Time".to_string(),
+                got: "Date".to_string(),
+            }),
             Value::Time(time) => Ok(value::TimeLike::Time(time)),
-            Value::Duration(_) => Err(EvaluationError::InvalidValueType { expected: "Time".to_string(), got: "Duration".to_string() }),
-            Value::SemVer(_) => Err(EvaluationError::InvalidValueType { expected: "Time".to_string(), got: "SemVer".to_string() }),
+            Value::Duration(_) => Err(EvaluationError::InvalidValueType {
+                expected: "Time".to_string(),
+                got: "Duration".to_string(),
+            }),
+            Value::SemVer(_) => Err(EvaluationError::InvalidValueType {
+                expected: "Time".to_string(),
+                got: "SemVer".to_string(),
+            }),
         }
     }
 
-    fn eval_duration_value(&self, value_expr: DurationValue, context: &EvaluationContext) -> Result<chrono::Duration> {
+    fn eval_duration_value(
+        &self,
+        value_expr: DurationValue,
+        context: &EvaluationContext,
+    ) -> Result<chrono::Duration> {
         match self.eval_ast(*value_expr.value, context)? {
-            Value::Null => Err(EvaluationError::InvalidValueType { expected: "Duration".to_string(), got: "Null".to_string() }),
-            Value::Number(_) => Err(EvaluationError::InvalidValueType { expected: "Duration".to_string(), got: "Number".to_string() }),
-            Value::String(_) => Err(EvaluationError::InvalidValueType { expected: "Duration".to_string(), got: "Bool".to_string() }),
-            Value::Bool(_) => Err(EvaluationError::InvalidValueType { expected: "Duration".to_string(), got: "Bool".to_string() }),
-            Value::Array(_) => Err(EvaluationError::InvalidValueType { expected: "Duration".to_string(), got: "Array".to_string() }),
-            Value::Object(_) => Err(EvaluationError::InvalidValueType { expected: "Duration".to_string(), got: "Object".to_string() }),
-            Value::DateTime(_) => Err(EvaluationError::InvalidValueType { expected: "Duration".to_string(), got: "DateTime".to_string() }),
-            Value::Date(_) => Err(EvaluationError::InvalidValueType { expected: "Duration".to_string(), got: "Date".to_string() }),
-            Value::Time(_) => Err(EvaluationError::InvalidValueType { expected: "Duration".to_string(), got: "Time".to_string() }),
+            Value::Null => Err(EvaluationError::InvalidValueType {
+                expected: "Duration".to_string(),
+                got: "Null".to_string(),
+            }),
+            Value::Number(_) => Err(EvaluationError::InvalidValueType {
+                expected: "Duration".to_string(),
+                got: "Number".to_string(),
+            }),
+            Value::String(_) => Err(EvaluationError::InvalidValueType {
+                expected: "Duration".to_string(),
+                got: "Bool".to_string(),
+            }),
+            Value::Bool(_) => Err(EvaluationError::InvalidValueType {
+                expected: "Duration".to_string(),
+                got: "Bool".to_string(),
+            }),
+            Value::Array(_) => Err(EvaluationError::InvalidValueType {
+                expected: "Duration".to_string(),
+                got: "Array".to_string(),
+            }),
+            Value::Object(_) => Err(EvaluationError::InvalidValueType {
+                expected: "Duration".to_string(),
+                got: "Object".to_string(),
+            }),
+            Value::DateTime(_) => Err(EvaluationError::InvalidValueType {
+                expected: "Duration".to_string(),
+                got: "DateTime".to_string(),
+            }),
+            Value::Date(_) => Err(EvaluationError::InvalidValueType {
+                expected: "Duration".to_string(),
+                got: "Date".to_string(),
+            }),
+            Value::Time(_) => Err(EvaluationError::InvalidValueType {
+                expected: "Duration".to_string(),
+                got: "Time".to_string(),
+            }),
             Value::Duration(duration) => Ok(duration),
-            Value::SemVer(_) => Err(EvaluationError::InvalidValueType { expected: "Duration".to_string(), got: "SemVer".to_string() }),
+            Value::SemVer(_) => Err(EvaluationError::InvalidValueType {
+                expected: "Duration".to_string(),
+                got: "SemVer".to_string(),
+            }),
         }
     }
 
@@ -1188,64 +1551,8 @@ impl Evaluator {
                 })
             }
 
-            (op, Value::DateTime(a), Value::DateTime(b)) => {
-                match (a, b) {
-                    (value::DateTime::Local(a), value::DateTime::Local(b)) => {
-                        match op {
-                            OpCode::Subtract => Ok((a - b).into()),
-                            OpCode::Less => Ok(Value::Bool(a < b)),
-                            OpCode::Greater => Ok(Value::Bool(a > b)),
-                            OpCode::LessEqual => Ok(Value::Bool(a <= b)),
-                            OpCode::GreaterEqual => Ok(Value::Bool(a >= b)),
-                            OpCode::Equal => Ok(Value::Bool(a == b)),
-                            OpCode::NotEqual => Ok(Value::Bool(a != b)),
-                            _ => {
-                                Err(EvaluationError::InvalidBinaryOp {
-                                    operation: op,
-                                    left: Value::from(a),
-                                    right: Value::from(b),
-                                })
-                            }
-                        }
-                    }
-                    (value::DateTime::Utc(a), value::DateTime::Utc(b)) => {
-                        match op {
-                            OpCode::Subtract => Ok((a - b).into()),
-                            OpCode::Less => Ok(Value::Bool(a < b)),
-                            OpCode::Greater => Ok(Value::Bool(a > b)),
-                            OpCode::LessEqual => Ok(Value::Bool(a <= b)),
-                            OpCode::GreaterEqual => Ok(Value::Bool(a >= b)),
-                            OpCode::Equal => Ok(Value::Bool(a == b)),
-                            OpCode::NotEqual => Ok(Value::Bool(a != b)),
-                            _ => {
-                                Err(EvaluationError::InvalidBinaryOp {
-                                    operation: op,
-                                    left: Value::from(a),
-                                    right: Value::from(b),
-                                })
-                            }
-                        }
-                    }
-                    (value::DateTime::Local(a), value::DateTime::Utc(b)) => {
-                        Err(EvaluationError::InvalidBinaryOp {
-                            operation,
-                            left: Value::from(a),
-                            right: Value::from(b),
-                        })
-                    }
-                    (value::DateTime::Utc(a), value::DateTime::Local(b)) => {
-                        Err(EvaluationError::InvalidBinaryOp {
-                            operation,
-                            left: Value::from(a),
-                            right: Value::from(b),
-                        })
-                    }
-                }
-            }
-
-            (op, Value::Duration(a), Value::Duration(b)) => {
-                match op {
-                    OpCode::Add => Ok((a + b).into()),
+            (op, Value::DateTime(a), Value::DateTime(b)) => match (a, b) {
+                (value::DateTime::Local(a), value::DateTime::Local(b)) => match op {
                     OpCode::Subtract => Ok((a - b).into()),
                     OpCode::Less => Ok(Value::Bool(a < b)),
                     OpCode::Greater => Ok(Value::Bool(a > b)),
@@ -1253,219 +1560,158 @@ impl Evaluator {
                     OpCode::GreaterEqual => Ok(Value::Bool(a >= b)),
                     OpCode::Equal => Ok(Value::Bool(a == b)),
                     OpCode::NotEqual => Ok(Value::Bool(a != b)),
-                    _ => {
-                        Err(EvaluationError::InvalidBinaryOp {
-                            operation,
-                            left: Value::Duration(a),
-                            right: Value::Duration(b),
-                        })
-                    }
+                    _ => Err(EvaluationError::InvalidBinaryOp {
+                        operation: op,
+                        left: Value::from(a),
+                        right: Value::from(b),
+                    }),
+                },
+                (value::DateTime::Utc(a), value::DateTime::Utc(b)) => match op {
+                    OpCode::Subtract => Ok((a - b).into()),
+                    OpCode::Less => Ok(Value::Bool(a < b)),
+                    OpCode::Greater => Ok(Value::Bool(a > b)),
+                    OpCode::LessEqual => Ok(Value::Bool(a <= b)),
+                    OpCode::GreaterEqual => Ok(Value::Bool(a >= b)),
+                    OpCode::Equal => Ok(Value::Bool(a == b)),
+                    OpCode::NotEqual => Ok(Value::Bool(a != b)),
+                    _ => Err(EvaluationError::InvalidBinaryOp {
+                        operation: op,
+                        left: Value::from(a),
+                        right: Value::from(b),
+                    }),
+                },
+                (value::DateTime::Local(a), value::DateTime::Utc(b)) => {
+                    Err(EvaluationError::InvalidBinaryOp {
+                        operation: op,
+                        left: Value::from(a),
+                        right: Value::from(b),
+                    })
                 }
-            }
+                (value::DateTime::Utc(a), value::DateTime::Local(b)) => {
+                    Err(EvaluationError::InvalidBinaryOp {
+                        operation: op,
+                        left: Value::from(a),
+                        right: Value::from(b),
+                    })
+                }
+            },
 
-            (op, Value::Duration(a), Value::Number(b))
-            => {
+            (op, Value::Duration(a), Value::Duration(b)) => Evaluator::apply_duration_op(op, a, b),
+
+            (op, Value::Duration(a), Value::Number(b)) => {
                 let b = b.as_i64().unwrap() as i32;
 
                 match op {
                     OpCode::Multiply => Ok((a * b).into()),
                     OpCode::Divide => Ok((a / b).into()),
-                    _ => {
-                        Err(EvaluationError::InvalidBinaryOp {
-                            operation,
-                            left: Value::Duration(a),
-                            right: Value::Number(Number::from(b)),
-                        })
-                    }
+                    _ => Err(EvaluationError::InvalidBinaryOp {
+                        operation: op,
+                        left: Value::Duration(a),
+                        right: Value::Number(Number::from(b)),
+                    }),
                 }
             }
 
-            (op, Value::Number(a), Value::Duration(b))
-            => {
+            (op, Value::Number(a), Value::Duration(b)) => {
                 let a = a.as_i64().unwrap() as i32;
 
                 match op {
                     OpCode::Multiply => Ok((b * a).into()),
-                    _ => {
-                        Err(EvaluationError::InvalidBinaryOp {
-                            operation,
-                            left: Value::Number(Number::from(a)),
-                            right: Value::Duration(b),
-                        })
-                    }
+                    _ => Err(EvaluationError::InvalidBinaryOp {
+                        operation: op,
+                        left: Value::Number(Number::from(a)),
+                        right: Value::Duration(b),
+                    }),
                 }
             }
 
-            (op, Value::Duration(a), Value::DateTime(b)) => {
-                match op {
-                    OpCode::Add => match b {
-                        DateTime::Local(b) => { Ok((b + a).into()) }
-                        DateTime::Utc(b) => { Ok((b + a).into()) }
-                    }
-                    _ => {
-                        Err(EvaluationError::InvalidBinaryOp {
-                            operation,
-                            left: Value::Duration(a),
-                            right: Value::DateTime(b),
-                        })
-                    }
-                }
-            }
+            (op, Value::Duration(a), Value::DateTime(b)) => match op {
+                OpCode::Add => match b {
+                    DateTime::Local(b) => Ok((b + a).into()),
+                    DateTime::Utc(b) => Ok((b + a).into()),
+                },
+                _ => Err(EvaluationError::InvalidBinaryOp {
+                    operation: op,
+                    left: Value::Duration(a),
+                    right: Value::DateTime(b),
+                }),
+            },
 
-            (op, Value::DateTime(a), Value::Duration(b))
-            => {
-                match op {
-                    OpCode::Add => match a {
-                        DateTime::Local(a) => { Ok((a + b).into()) }
-                        DateTime::Utc(a) => { Ok((a + b).into()) }
-                    }
-                    OpCode::Subtract => match a {
-                        DateTime::Local(a) => { Ok((a - b).into()) }
-                        DateTime::Utc(a) => { Ok((a - b).into()) }
-                    }
-                    _ => {
-                        Err(EvaluationError::InvalidBinaryOp {
-                            operation,
-                            left: Value::DateTime(a),
-                            right: Value::Duration(b),
-                        })
-                    }
-                }
-            }
+            (op, Value::DateTime(a), Value::Duration(b)) => match op {
+                OpCode::Add => match a {
+                    DateTime::Local(a) => Ok((a + b).into()),
+                    DateTime::Utc(a) => Ok((a + b).into()),
+                },
+                OpCode::Subtract => match a {
+                    DateTime::Local(a) => Ok((a - b).into()),
+                    DateTime::Utc(a) => Ok((a - b).into()),
+                },
+                _ => Err(EvaluationError::InvalidBinaryOp {
+                    operation: op,
+                    left: Value::DateTime(a),
+                    right: Value::Duration(b),
+                }),
+            },
 
-            (op, Value::Date(a), Value::Date(b))
-            => {
-                match op {
-                    OpCode::Subtract => Ok((a - b).into()),
-                    OpCode::Less => Ok(Value::Bool(a < b)),
-                    OpCode::Greater => Ok(Value::Bool(a > b)),
-                    OpCode::LessEqual => Ok(Value::Bool(a <= b)),
-                    OpCode::GreaterEqual => Ok(Value::Bool(a >= b)),
-                    OpCode::Equal => Ok(Value::Bool(a == b)),
-                    OpCode::NotEqual => Ok(Value::Bool(a != b)),
-                    _ => {
-                        Err(EvaluationError::InvalidBinaryOp {
-                            operation,
-                            left: Value::Date(a),
-                            right: Value::Date(b),
-                        })
-                    }
-                }
-            }
+            (op, Value::Date(a), Value::Date(b)) => Evaluator::apply_date_op(op, a, b),
 
-            (op, Value::Duration(a), Value::Date(b))
-            => {
-                match op {
-                    OpCode::Add => Ok((b + a).into()),
-                    _ => {
-                        Err(EvaluationError::InvalidBinaryOp {
-                            operation,
-                            left: Value::Duration(a),
-                            right: Value::Date(b),
-                        })
-                    }
-                }
-            }
+            (op, Value::Duration(a), Value::Date(b)) => match op {
+                OpCode::Add => Ok((b + a).into()),
+                _ => Err(EvaluationError::InvalidBinaryOp {
+                    operation,
+                    left: Value::Duration(a),
+                    right: Value::Date(b),
+                }),
+            },
 
-            (op, Value::Date(a), Value::Duration(b))
-            => {
-                match op {
-                    OpCode::Add => Ok((a + b).into()),
-                    OpCode::Subtract => Ok((a - b).into()),
-                    _ => {
-                        Err(EvaluationError::InvalidBinaryOp {
-                            operation,
-                            left: Value::Date(a),
-                            right: Value::Duration(b),
-                        })
-                    }
-                }
-            }
+            (op, Value::Date(a), Value::Duration(b)) => match op {
+                OpCode::Add => Ok((a + b).into()),
+                OpCode::Subtract => Ok((a - b).into()),
+                _ => Err(EvaluationError::InvalidBinaryOp {
+                    operation,
+                    left: Value::Date(a),
+                    right: Value::Duration(b),
+                }),
+            },
 
-            (op, Value::Time(a), Value::Time(b))
-            => {
-                match op {
-                    OpCode::Subtract => Ok((a - b).into()),
-                    OpCode::Less => Ok(Value::Bool(a < b)),
-                    OpCode::Greater => Ok(Value::Bool(a > b)),
-                    OpCode::LessEqual => Ok(Value::Bool(a <= b)),
-                    OpCode::GreaterEqual => Ok(Value::Bool(a >= b)),
-                    OpCode::Equal => Ok(Value::Bool(a == b)),
-                    OpCode::NotEqual => Ok(Value::Bool(a != b)),
-                    _ => {
-                        Err(EvaluationError::InvalidBinaryOp {
-                            operation,
-                            left: Value::Time(a),
-                            right: Value::Time(b),
-                        })
-                    }
-                }
-            }
+            (op, Value::Time(a), Value::Time(b)) => Evaluator::apply_time_op(operation, op, a, b),
 
-            (op, Value::Duration(a), Value::Time(b))
-            => {
-                match op {
-                    OpCode::Add => Ok((b + a).into()),
-                    _ => {
-                        Err(EvaluationError::InvalidBinaryOp {
-                            operation,
-                            left: Value::Duration(a),
-                            right: Value::Time(b),
-                        })
-                    }
-                }
-            }
+            (op, Value::Duration(a), Value::Time(b)) => match op {
+                OpCode::Add => Ok((b + a).into()),
+                _ => Err(EvaluationError::InvalidBinaryOp {
+                    operation,
+                    left: Value::Duration(a),
+                    right: Value::Time(b),
+                }),
+            },
 
-            (op, Value::Time(a), Value::Duration(b))
-            => {
-                match op {
-                    OpCode::Add => Ok((a + b).into()),
-                    OpCode::Subtract => Ok((a - b).into()),
-                    _ => {
-                        Err(EvaluationError::InvalidBinaryOp {
-                            operation,
-                            left: Value::Time(a),
-                            right: Value::Duration(b),
-                        })
-                    }
-                }
-            }
+            (op, Value::Time(a), Value::Duration(b)) => match op {
+                OpCode::Add => Ok((a + b).into()),
+                OpCode::Subtract => Ok((a - b).into()),
+                _ => Err(EvaluationError::InvalidBinaryOp {
+                    operation,
+                    left: Value::Time(a),
+                    right: Value::Duration(b),
+                }),
+            },
 
-            (op, Value::SemVer(a), Value::SemVer(b)) => {
-                Self::apply_semver_op(op, a, b)
-            }
+            (op, Value::SemVer(a), Value::SemVer(b)) => Self::apply_semver_op(op, a, b),
 
             (op, Value::SemVer(a), Value::String(b)) => {
                 use anyhow::Context;
-                let b = Version::parse(&b).with_context(|| format!("Not a valid version string {}", b))?;
+                let b = utils::parse_semver(&b)
+                    .with_context(|| format!("Not a valid version string {}", b))?;
                 Self::apply_semver_op(op, a, b)
             }
 
             (op, Value::String(a), Value::SemVer(b)) => {
                 use anyhow::Context;
-                let a = Version::parse(&a).with_context(|| format!("Not a valid version string {}", a))?;
+                let a = utils::parse_semver(&a)
+                    .with_context(|| format!("Not a valid version string {}", a))?;
                 Self::apply_semver_op(op, a, b)
             }
 
-            (op, Value::String(a), Value::String(b)) => {
-                match op {
-                    OpCode::Add => Ok((format!("{}{}", a, b)).into()),
-                    OpCode::Less => Ok(Value::Bool(a < b)),
-                    OpCode::Greater => Ok(Value::Bool(a > b)),
-                    OpCode::LessEqual => Ok(Value::Bool(a <= b)),
-                    OpCode::GreaterEqual => Ok(Value::Bool(a >= b)),
-                    OpCode::Equal => Ok(Value::Bool(a == b)),
-                    OpCode::NotEqual => Ok(Value::Bool(a != b)),
-                    OpCode::In => Ok(Value::Bool(b.contains(&a))),
-                    _ => {
-                        Err(EvaluationError::InvalidBinaryOp {
-                            operation,
-                            left: Value::String(a),
-                            right: Value::String(b),
-                        })
-                    }
-                }
-            }
+            (op, Value::String(a), Value::String(b)) => Self::apply_string_op(op, a, b),
 
             (OpCode::In, left, Value::Array(v)) => Ok(Value::Bool(v.contains(&left))),
 
@@ -1490,6 +1736,81 @@ impl Evaluator {
         }
     }
 
+    fn apply_time_op(
+        operation: OpCode,
+        op: OpCode,
+        a: NaiveTime,
+        b: NaiveTime,
+    ) -> Result<Value, EvaluationError> {
+        match op {
+            OpCode::Subtract => Ok((a - b).into()),
+            OpCode::Less => Ok(Value::Bool(a < b)),
+            OpCode::Greater => Ok(Value::Bool(a > b)),
+            OpCode::LessEqual => Ok(Value::Bool(a <= b)),
+            OpCode::GreaterEqual => Ok(Value::Bool(a >= b)),
+            OpCode::Equal => Ok(Value::Bool(a == b)),
+            OpCode::NotEqual => Ok(Value::Bool(a != b)),
+            _ => Err(EvaluationError::InvalidBinaryOp {
+                operation,
+                left: Value::Time(a),
+                right: Value::Time(b),
+            }),
+        }
+    }
+
+    fn apply_date_op(op: OpCode, a: NaiveDate, b: NaiveDate) -> Result<Value, EvaluationError> {
+        match op {
+            OpCode::Subtract => Ok((a - b).into()),
+            OpCode::Less => Ok(Value::Bool(a < b)),
+            OpCode::Greater => Ok(Value::Bool(a > b)),
+            OpCode::LessEqual => Ok(Value::Bool(a <= b)),
+            OpCode::GreaterEqual => Ok(Value::Bool(a >= b)),
+            OpCode::Equal => Ok(Value::Bool(a == b)),
+            OpCode::NotEqual => Ok(Value::Bool(a != b)),
+            _ => Err(EvaluationError::InvalidBinaryOp {
+                operation: op,
+                left: Value::Date(a),
+                right: Value::Date(b),
+            }),
+        }
+    }
+
+    fn apply_duration_op(op: OpCode, a: Duration, b: Duration) -> Result<Value, EvaluationError> {
+        match op {
+            OpCode::Add => Ok((a + b).into()),
+            OpCode::Subtract => Ok((a - b).into()),
+            OpCode::Less => Ok(Value::Bool(a < b)),
+            OpCode::Greater => Ok(Value::Bool(a > b)),
+            OpCode::LessEqual => Ok(Value::Bool(a <= b)),
+            OpCode::GreaterEqual => Ok(Value::Bool(a >= b)),
+            OpCode::Equal => Ok(Value::Bool(a == b)),
+            OpCode::NotEqual => Ok(Value::Bool(a != b)),
+            _ => Err(EvaluationError::InvalidBinaryOp {
+                operation: op,
+                left: Value::Duration(a),
+                right: Value::Duration(b),
+            }),
+        }
+    }
+
+    fn apply_string_op(op: OpCode, a: String, b: String) -> Result<Value, EvaluationError> {
+        match op {
+            OpCode::Add => Ok((format!("{}{}", a, b)).into()),
+            OpCode::Less => Ok(Value::Bool(a < b)),
+            OpCode::Greater => Ok(Value::Bool(a > b)),
+            OpCode::LessEqual => Ok(Value::Bool(a <= b)),
+            OpCode::GreaterEqual => Ok(Value::Bool(a >= b)),
+            OpCode::Equal => Ok(Value::Bool(a == b)),
+            OpCode::NotEqual => Ok(Value::Bool(a != b)),
+            OpCode::In => Ok(Value::Bool(b.contains(&a))),
+            _ => Err(EvaluationError::InvalidBinaryOp {
+                operation: op,
+                left: Value::String(a),
+                right: Value::String(b),
+            }),
+        }
+    }
+
     fn apply_semver_op(op: OpCode, a: Version, b: Version) -> Result<Value> {
         match op {
             OpCode::Less => Ok(Value::Bool(a < b)),
@@ -1498,13 +1819,11 @@ impl Evaluator {
             OpCode::GreaterEqual => Ok(Value::Bool(a >= b)),
             OpCode::Equal => Ok(Value::Bool(a == b)),
             OpCode::NotEqual => Ok(Value::Bool(a != b)),
-            _ => {
-                Err(EvaluationError::InvalidBinaryOp {
-                    operation: op,
-                    left: Value::SemVer(a),
-                    right: Value::SemVer(b),
-                })
-            }
+            _ => Err(EvaluationError::InvalidBinaryOp {
+                operation: op,
+                left: Value::SemVer(a),
+                right: Value::SemVer(b),
+            }),
         }
     }
 }
@@ -1516,6 +1835,15 @@ mod tests {
     use value::Value;
 
     use super::*;
+
+    #[test]
+    fn test_semver_parsing() -> anyhow::Result<()> {
+        let got = utils::parse_semver("3.4.9.456 ")?;
+        let expected = Version::new(3, 4, 9);
+
+        assert_eq!(got, expected);
+        Ok(())
+    }
 
     #[test]
     fn test_literal() {
@@ -1582,18 +1910,12 @@ mod tests {
 
     #[test]
     fn test_double_negation() {
-        assert_eq!(
-            Evaluator::new().eval("!!'a'").unwrap(),
-            Value::Bool(true)
-        );
+        assert_eq!(Evaluator::new().eval("!!'a'").unwrap(), Value::Bool(true));
     }
 
     #[test]
     fn test_string_negation() {
-        assert_eq!(
-            Evaluator::new().eval("!'a'").unwrap(),
-            Value::Bool(false)
-        );
+        assert_eq!(Evaluator::new().eval("!'a'").unwrap(), Value::Bool(false));
     }
 
     #[test]
@@ -1641,7 +1963,9 @@ mod tests {
         let context = json!({"a": {"b": 2.0}});
         let expected: Value = 3.0.into();
         assert_eq!(
-            Evaluator::new().eval_in_context("a.get(c, 3.0)", context).unwrap(),
+            Evaluator::new()
+                .eval_in_context("a.get(c, 3.0)", context)
+                .unwrap(),
             expected
         );
     }
@@ -1775,10 +2099,7 @@ mod tests {
     #[test]
     fn test_array_literal() {
         let expected: Value = json!(["foo", 3.0]).into();
-        assert_eq!(
-            Evaluator::new().eval("['foo', 1+2]").unwrap(),
-            expected
-        );
+        assert_eq!(Evaluator::new().eval("['foo', 1+2]").unwrap(), expected);
     }
 
     #[test]
@@ -1818,10 +2139,7 @@ mod tests {
     #[test]
     fn test_conditional_expression() {
         let expected: Value = (1f64).into();
-        assert_eq!(
-            Evaluator::new().eval("'foo' ? 1 : 2").unwrap(),
-            expected
-        );
+        assert_eq!(Evaluator::new().eval("'foo' ? 1 : 2").unwrap(), expected);
 
         let expected: Value = (2f64).into();
         assert_eq!(Evaluator::new().eval("'' ? 1 : 2").unwrap(), expected);
@@ -1856,8 +2174,14 @@ mod tests {
 
     #[test]
     fn test_string_escapes() {
-        assert_eq!(Evaluator::new().eval("'a\\'b'").unwrap(), Value::String("a'b".to_string()));
-        assert_eq!(Evaluator::new().eval("\"a\\\"b\"").unwrap(), Value::String("a\"b".to_string()));
+        assert_eq!(
+            Evaluator::new().eval("'a\\'b'").unwrap(),
+            Value::String("a'b".to_string())
+        );
+        assert_eq!(
+            Evaluator::new().eval("\"a\\\"b\"").unwrap(),
+            Value::String("a\"b".to_string())
+        );
     }
 
     #[test]
@@ -1872,7 +2196,10 @@ mod tests {
                 .expect("Should be a string!");
             Ok(Value::String(s.to_lowercase()))
         });
-        assert_eq!(evaluator.eval("'T_T'.lower()").unwrap(), Value::String("t_t".to_string()));
+        assert_eq!(
+            evaluator.eval("'T_T'.lower()").unwrap(),
+            Value::String("t_t".to_string())
+        );
     }
 
     #[test]
@@ -1938,10 +2265,7 @@ mod tests {
         });
 
         let expected: Value = (vec!["John", "Doe"]).into();
-        assert_eq!(
-            evaluator.eval("'John Doe'.split(' ')").unwrap(),
-            expected
-        );
+        assert_eq!(evaluator.eval("'John Doe'.split(' ')").unwrap(), expected);
     }
 
     #[derive(Debug, thiserror::Error)]
@@ -1977,9 +2301,6 @@ mod tests {
         });
         let exp = "foo[.bobo >= 50]";
         let expected: Value = json!([{"bobo": 50, "fofo": 100}, {"bobo": 60, "baz": 90}]).into();
-        assert_eq!(
-            evaluator.eval_in_context(exp, context).unwrap(),
-            expected
-        );
+        assert_eq!(evaluator.eval_in_context(exp, context).unwrap(), expected);
     }
 }
